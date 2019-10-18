@@ -1,3 +1,7 @@
+directory
+/.idea
+/cmake-build-debug
+
 # Prerequisites
 *.d
 
@@ -30,3 +34,11 @@
 *.exe
 *.out
 *.app
+
+#Visual Studio
+/mymfs/x64
+/mymfs/x64
+/x64
+/.vs
+*.vcxproj
+*.vcxproj.user
