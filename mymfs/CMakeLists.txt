@@ -10,3 +10,4 @@
 
     target_link_libraries(mymfs stdc++fs)
     target_link_libraries(mymfs -lz)
+    target_link_libraries(mymfs -pthread)

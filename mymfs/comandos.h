@@ -1,20 +1,13 @@
-#include <zlib.h>
 #include <vector>
-#include <thread>
-#include <iostream>
-#include <fstream>
-#include <math.h>
 #include <string>
-#include <experimental/filesystem>
-#include <cstring>
 
-namespace fsys = std::experimental::filesystem;
 using namespace std;
 
 class Comandos {
  private:
   const int sizeFileMax = 512000;          //Define o tamanho maximo dos arquivos como 500KB
   const int sizeFileConfig = 51200;
+  const int numThreads = 4;
 
   struct Diretrizes {
     int inicio;
@@ -29,7 +22,7 @@ class Comandos {
 
   string *nomeExtensao(string path);
 
-  void escritaParalela(Diretrizes diretrizes[], int numArquivos, string filePath, int i, int th);
+  void escritaParalela(vector<Diretrizes> *d, string filePath, int i, int th);
 
  public:
 

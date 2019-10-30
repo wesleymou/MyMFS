@@ -2,6 +2,7 @@
 #include <zlib.h>
 #include <vector>
 #include <thread>
+#include <future>
 #include <iostream>
 #include <fstream>
 #include <math.h>
@@ -65,9 +66,11 @@ string *Comandos::nomeExtensao(string path) {
     return retorno;
 }
 
-void Comandos::escritaParalela(Diretrizes diretrizes[], int numArquivos, string filePath, int i, int th) {
+void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, int th) {
+    vector<Diretrizes> diretrizes = *d;
+    cout << this_thread::get_id() << endl;
     ifstream infile(filePath, ifstream::binary);
-    for (i; i < numArquivos; i += th) {   //Cria os arquivos de 500KB ou menos
+    for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
         char *buffer = new char[diretrizes[i].length];
         char *compress = new char[diretrizes[i].length];
         uLongf compress_length = compressBound(diretrizes[i].length);
@@ -163,25 +166,36 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
         infile.close();
 
         int numArquivos = ceil((float) end / (float) this->sizeFileMax); // Verifica quantos arquivos de 500 KB ou menos serão criados
-        Diretrizes diretrizes[numArquivos];
+        vector<Diretrizes> diretrizes;
         int cont = 0;
 
         for (int i = 0; i < numArquivos; ++i) {
-            diretrizes[i].path = unidades[cont] + "files/" + nomeDiretorio;
-            diretrizes[i].compress = unidades[(cont + 1) % unidades.size()] + "files/" + nomeDiretorio;
-            diretrizes[i].inicio = i * this->sizeFileMax;
+            Diretrizes d;
+            d.path = unidades[cont] + "files/" + nomeDiretorio;
+            d.compress = unidades[(cont + 1) % unidades.size()] + "files/" + nomeDiretorio;
+            d.inicio = i * this->sizeFileMax;
             if (i >= (numArquivos - 1)) {
-                diretrizes[i].length = i * this->sizeFileMax + end;
+                d.length = i * this->sizeFileMax + end;
             } else {
-                diretrizes[i].length = this->sizeFileMax;
+                d.length = this->sizeFileMax;
             }
             if (!fsys::exists(unidades[cont] + "files/" + nomeDiretorio)) {
                 fsys::create_directory(unidades[cont] + "files/" + nomeDiretorio);
             }
+            diretrizes.push_back(d);
             cont = (cont + 1) % unidades.size();
         }
 
-        escritaParalela(diretrizes, numArquivos, caminhoArquivoImport, 0, 1);
+        vector<std::thread> threads;
+        for (int i = 0; i < this->numThreads; ++i) {
+            threads.push_back(std::thread(&Comandos::escritaParalela, this,
+                                          &diretrizes, caminhoArquivoImport, i, 4));
+        }
+
+        for (std::thread &th : threads) {
+            if (th.joinable())
+                th.join();
+        }
 
         string linhaConfig;
         linhaConfig = nomeDiretorio + " " + to_string(numArquivos) + "\n";
@@ -192,7 +206,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
 
         ofstream arqConfigZip(unidades[1] + "/mymfs.config.zip", ios_base::app | ios_base::out);
         arqConfigZip << linhaConfig
-                  << endl; //Adiciona o arquivo importado no arquivo de configuração (nomeArquivo;quantidadeArquivos)
+                     << endl; //Adiciona o arquivo importado no arquivo de configuração (nomeArquivo;quantidadeArquivos)
         arqConfigZip.close();
 
         return "Arquivo importado para o Mymfs com sucesso!";
@@ -202,6 +216,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
 }
 
 string Comandos::verificarArquivoExisteEmConfig(string caminhoComando, string nomeArquivo) {
+
 
     ifstream arqConfig(caminhoComando + "/mymfs.config");
 
