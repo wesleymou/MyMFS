@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
         string comando = argv[2];        //Comando do Mymfs que deve ser executado
 
         if (comando == "config") {
-            cout << comandos.config(caminhoComando, argc-3, argv + 3) << endl;
+            cout << comandos.config(caminhoComando, argc - 3, argv + 3) << endl;
         } else if (comando == "import") {
             if (argc == 4) {
                 string caminhoArquivoImport = argv[3];    //Caminho do arquivo a ser importado para o diretório especficiado
@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
                 string caminhoArquivoExport = argv[3];    //Caminho do arquivo a ser exportado para o diretório especficiado
                 string caminhoDiretorioExport = argv[4];  //Caminho do diretório para onde o arquivo deve ser exportado
 
-                comandos.exportarArquivo(caminhoComando, caminhoArquivoExport, caminhoDiretorioExport);
+                cout << comandos.exportarArquivo(caminhoComando, caminhoArquivoExport, caminhoDiretorioExport) << endl;
             } else
                 cout << "Comando export incorreto." << endl;
         } else if (comando == "listall") {

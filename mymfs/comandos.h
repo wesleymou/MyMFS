@@ -16,13 +16,23 @@ class Comandos {
     string compress;
   };
 
+  struct LinhaConfig {
+    string arquivo;
+    string extensao;
+    int quantidade;
+  };
+
   bool mymfsEstaConfigurado(string caminhoComando);
 
   vector<string> obterUnidades(string path);
 
   string *nomeExtensao(string path);
 
+  int verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo);
+
   void escritaParalela(vector<Diretrizes> *d, string filePath, int i, int th);
+
+  void leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th);
 
  public:
 
@@ -30,9 +40,7 @@ class Comandos {
 
   string importarArquivo(string caminhoComando, string caminhoArquivoImport);
 
-  string verificarArquivoExisteEmConfig(string caminhoComando, string nomeArquivo);
-
-  void exportarArquivo(string caminhoComando, string nomeArquivoExport, string caminhoDiretorioExport);
+  string exportarArquivo(string caminhoComando, string nomeArquivoExport, string caminhoDiretorioExport);
 
   void listAll(string caminhoComando);
 
