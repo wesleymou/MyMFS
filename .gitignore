@@ -1,6 +1,7 @@
 directory
-/.idea
-/cmake-build-debug
+.idea/
+cmake-build-debug/
+UOEncryption/
 
 # Prerequisites
 *.d

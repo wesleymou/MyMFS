@@ -1,12 +1,11 @@
 #include "comandos.h"
 #include <iostream>
 #include <string>
-#include <experimental/filesystem>
 
-namespace fsys = std::experimental::filesystem;
 using namespace std;
 
 int main(int argc, char **argv) {
+    Comandos comandos;
 
     //Deve possuir no minimo 3 argumentos (nome do programa - passado automaticamente,
     //caminho da unidade X, comando a ser executado)
@@ -15,82 +14,58 @@ int main(int argc, char **argv) {
         string comando = argv[2];        //Comando do Mymfs que deve ser executado
 
         if (comando == "config") {
-            config(caminhoComando);
-        }
-
-        else if (comando == "import") {
+            cout << comandos.config(caminhoComando, argc-3, argv + 3) << endl;
+        } else if (comando == "import") {
             if (argc == 4) {
                 string caminhoArquivoImport = argv[3];    //Caminho do arquivo a ser importado para o diretório especficiado
 
-                importarArquivo(caminhoComando, caminhoArquivoImport);
-            }
-            else
+                cout << comandos.importarArquivo(caminhoComando, caminhoArquivoImport) << endl;
+            } else
                 cout << "Comando import incorreto." << endl;
-        }
-
-        else if (comando == "export") {
+        } else if (comando == "export") {
             if (argc == 5) {
                 string caminhoArquivoExport = argv[3];    //Caminho do arquivo a ser exportado para o diretório especficiado
                 string caminhoDiretorioExport = argv[4];  //Caminho do diretório para onde o arquivo deve ser exportado
 
-                exportarArquivo(caminhoComando, caminhoArquivoExport, caminhoDiretorioExport);
-            }
-            else
+                comandos.exportarArquivo(caminhoComando, caminhoArquivoExport, caminhoDiretorioExport);
+            } else
                 cout << "Comando export incorreto." << endl;
-        }
-
-        else if (comando == "listall") {
-            listAll(caminhoComando);
-        }
-
-        else if (comando == "remove") {
+        } else if (comando == "listall") {
+            comandos.listAll(caminhoComando);
+        } else if (comando == "remove") {
             if (argc == 4) {
                 string caminhoArquivoRemove = argv[3];    //Caminho do arquivo a ser removido
 
-                remove(caminhoComando, caminhoArquivoRemove);
-            }
-            else
+                comandos.remove(caminhoComando, caminhoArquivoRemove);
+            } else
                 cout << "Comando remove incorreto." << endl;
-        }
-
-        else if (comando == "removeall") {
-            removeAll(caminhoComando);
-        }
-
-        else if (comando == "grep") {
+        } else if (comando == "removeall") {
+            comandos.removeAll(caminhoComando);
+        } else if (comando == "grep") {
             if (argc == 5) {
                 string palavra = argv[3];    //Palavra que será procurado no arquivo
                 string caminhoArquivoToRead = argv[4];  //Caminho do arquivo que será pesquisado
 
-                procuraPalavra(caminhoComando, palavra, caminhoArquivoToRead);
-            }
-            else
+                comandos.procuraPalavra(caminhoComando, palavra, caminhoArquivoToRead);
+            } else
                 cout << "Comando grep incorreto." << endl;
-        }
-
-        else if (comando == "head100") {
+        } else if (comando == "head100") {
             if (argc == 4) {
                 string caminhoArquivoToRead = argv[3];  //Caminho do arquivo que será lido
 
-                primeiras100Linhas(caminhoComando, caminhoArquivoToRead);
-            }
-            else
+                comandos.primeiras100Linhas(caminhoComando, caminhoArquivoToRead);
+            } else
                 cout << "Comando head100 incorreto." << endl;
-        }
-
-        else if (comando == "tail100") {
+        } else if (comando == "tail100") {
             if (argc == 4) {
                 string caminhoArquivoToRead = argv[3];  //Caminho do arquivo que será lido
 
-                ultimas100Linhas(caminhoComando, caminhoArquivoToRead);
-            }
-            else
+                comandos.ultimas100Linhas(caminhoComando, caminhoArquivoToRead);
+            } else
                 cout << "Comando tail100 incorreto." << endl;
-        }
-        else
+        } else
             cout << "Comando invalido." << endl;
-    }
-    else {
+    } else {
         cout << "Por favor, informe os argumentos necessarios" << endl;
     }
 
