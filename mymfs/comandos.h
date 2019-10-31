@@ -42,7 +42,7 @@ class Comandos {
 
   string exportarArquivo(string caminhoComando, string nomeArquivoExport, string caminhoDiretorioExport);
 
-  void listAll(string caminhoComando);
+  string listAll(string caminhoComando);
 
   string converterLinhaConfigParaNomeArquivo(string linhaConfig);
 

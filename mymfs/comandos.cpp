@@ -338,35 +338,24 @@ string Comandos::exportarArquivo(string caminhoComando, string nomeArquivoExport
     }
 }
 
-void Comandos::listAll(string caminhoComando) {
+string Comandos::listAll(string caminhoComando) {
     //Valida se o arquivo config existe no diretorio especificado
-    ifstream arqConfig(caminhoComando + "/mymfs.config");
     if (mymfsEstaConfigurado(caminhoComando)) {
         //Caso exista, percorre o arquivo buscando os nomes dos diretorios/arquivos e listando-os
-        string nomeDiretorioEncontrado = "x";
-        string qtdArquivosEncontrado = "";
-        string linhaConfig = "";
-        getline(arqConfig, linhaConfig);
-        arqConfig.seekg(0, ios::beg);
-        if (linhaConfig.length() > 0) {
-            do {
-                getline(arqConfig, linhaConfig);
-                if (linhaConfig.length() > 0) {
-                    //Caso existam registros no arquivo config, eles serão buscados e exibidos
-                    nomeDiretorioEncontrado = linhaConfig.substr(0, linhaConfig.find(" "));
-                    string extensaoDiretorio = linhaConfig.substr(0, linhaConfig.find("-"));
-                    nomeDiretorioEncontrado = nomeDiretorioEncontrado.substr(nomeDiretorioEncontrado.find("-") + 1,
-                                                                             (nomeDiretorioEncontrado.size() - nomeDiretorioEncontrado.find(
-                                                                                 "-")));
-                    //Exibe nome do diretório/arquivo
-                    cout << nomeDiretorioEncontrado + "." << extensaoDiretorio << endl;
-                }
-            } while (!arqConfig.eof());
+        vector<string> unidades = obterUnidades(caminhoComando);
+        ifstream arqConfig(unidades[0] + "/mymfs.config");
+        string linha;
+        string lista;
+        while (getline(arqConfig, linha)){
+            lista += linha + "\n";
+        }
+        if (lista.length() > 0) {
+            return lista;
         } else {
-            cout << "Nao ha arquivos salvos pelo Mymfs!" << endl;
+            return "Nao ha arquivos salvos pelo Mymfs!";
         }
     } else {
-        cout << "O Mymfs nao esta configurado na unidade informada." << endl;
+        return "O Mymfs nao esta configurado na unidade informada.";
     }
 }
 

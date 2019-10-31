@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
             } else
                 cout << "Comando export incorreto." << endl;
         } else if (comando == "listall") {
-            comandos.listAll(caminhoComando);
+            cout << comandos.listAll(caminhoComando) << endl;
         } else if (comando == "remove") {
             if (argc == 4) {
                 string caminhoArquivoRemove = argv[3];    //Caminho do arquivo a ser removido
