@@ -9,9 +9,14 @@
 #include <string>
 #include <experimental/filesystem>
 #include <cstring>
+#include <assert.h>
 
 namespace fsys = std::experimental::filesystem;
 using namespace std;
+
+vector<unsigned char> compress_string(const char *str, int compressionlevel = Z_BEST_COMPRESSION);
+
+vector<unsigned char> decompress_string(vector<unsigned char> str);
 
 bool Comandos::mymfsEstaConfigurado(string caminhoComando) {
     if (!fsys::exists(caminhoComando))
@@ -21,12 +26,8 @@ bool Comandos::mymfsEstaConfigurado(string caminhoComando) {
     int cont = 0;
     while (getline(arquivoConfig, line)) {
         if (fsys::exists(line + "/mymfs.config")) {
-            cont++;
-        } else if (fsys::exists(line + "/mymfs.config.zip")) {
-            cont++;
-        }
-
-        if (cont == 2) {
+            return true;
+        } else if (fsys::exists(line + "/mymfs.config")) {
             return true;
         }
     }
@@ -102,24 +103,22 @@ void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, in
     ifstream infile(filePath, ifstream::binary);
     for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
         char *buffer = new char[diretrizes[i].length];
-        char *compress = new char[diretrizes[i].length];
-        uLongf compress_length = compressBound(diretrizes[i].length);
 
         infile.seekg(diretrizes[i].inicio);
         infile.read(buffer, diretrizes[i].length);
 
-        compress2((Bytef *) compress, &compress_length,
-                  (Bytef *) buffer, diretrizes[i].length,
-                  Z_BEST_COMPRESSION);
-
         ofstream outfile(diretrizes[i].path + "/" + to_string(i), ofstream::binary);
-        outfile << buffer << endl;
+        outfile << buffer;
         outfile.close();
 
-        ofstream compressFile(diretrizes[i].compress + "/" + to_string(i) + ".zip", ofstream::binary);
-        compressFile << compress << endl;
+        vector<unsigned char> buffer_compresss = compress_string(buffer);
+
+        ofstream compressFile(diretrizes[i].compress + "/" + to_string(i) + ".zlib", ofstream::binary);
+        compressFile.write(reinterpret_cast<const char *>(buffer_compresss.data()), buffer_compresss.size());
+        streampos x = compressFile.tellp();
         compressFile.close();
     }
+    infile.close();
 }
 
 void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th) {
@@ -127,29 +126,30 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
     ofstream outfile(filePath, ifstream::binary);
 
     for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
-        char *buffer = new char[this->sizeFileMax];
+
         if (fsys::exists(diretrizes[i].path)) {
-            ifstream infile = ifstream(diretrizes[i].path, ifstream::binary);
-            infile.read(buffer, diretrizes[i].length);
+            ifstream infile(diretrizes[i].path, ios::in | ios::binary | ios::ate);
+            int size = infile.tellg();
+            char *buffer = new char[size];
+            infile.seekg(0, ios::beg);
+            infile.read(buffer, size);
 
             outfile.seekp(diretrizes[i].inicio);
-            outfile << buffer << endl;
+            outfile << buffer;
 
             infile.close();
         } else if (fsys::exists(diretrizes[i].compress)) {
-            ifstream infile = ifstream(diretrizes[i].compress, ifstream::binary);
-            char *descompress = new char[this->sizeFileMax];
-            uLongf descompress_length = this->sizeFileMax;
+            ifstream infile = ifstream(diretrizes[i].compress, ios::in | ios::binary | ios::ate);
+            int size = infile.tellg();
 
-            infile.read(buffer, diretrizes[i].length);
-            uLongf buffer_length = strlen(buffer);
+            vector<unsigned char> compress_buffer(size);
+            infile.seekg(0, ios::beg);
+            infile.read(reinterpret_cast<char *>(&compress_buffer[0]), size);
 
-            uncompress2((Bytef *) descompress, &descompress_length,
-                        (Bytef *) buffer, &buffer_length);
+            vector<unsigned char> descompress = decompress_string(compress_buffer);
 
-            outfile.seekp(0, ios_base::end);
-            outfile << descompress;
-
+            outfile.seekp(diretrizes[i].inicio);
+            outfile.write(reinterpret_cast<const char *>(descompress.data()), descompress.size());
         } else {
             cout << "arquivo corrompido" << endl;
             return;
@@ -171,7 +171,7 @@ string Comandos::config(string caminhoComando, int length, char **unidades) {
     } else {
         ofstream arquivoConfig((string) unidades[0] + "/mymfs.config");       //Cria o arquivo config, configurando o Mymfs na unidade especificada
         arquivoConfig.close();
-        ofstream arquivoConfigCompress((string) unidades[1] + "/mymfs.config.zip");       //Cria o arquivo config, configurando o Mymfs na unidade especificada
+        ofstream arquivoConfigCompress((string) unidades[1] + "/mymfs.config");       //Cria o arquivo config, configurando o Mymfs na unidade especificada
         arquivoConfigCompress.close();
 
         string unidadesString = "";
@@ -271,7 +271,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
                       << endl; //Adiciona o arquivo importado no arquivo de configuração (nomeArquivo;quantidadeArquivos)
             arqConfig.close();
 
-            ofstream arqConfigZip(unidades[1] + "/mymfs.config.zip", ios_base::app | ios_base::out);
+            ofstream arqConfigZip(unidades[1] + "/mymfs.config", ios_base::app | ios_base::out);
             arqConfigZip << linhaConfig
                          << endl; //Adiciona o arquivo importado no arquivo de configuração (nomeArquivo;quantidadeArquivos)
             arqConfigZip.close();
@@ -306,7 +306,7 @@ string Comandos::exportarArquivo(string caminhoComando, string nomeArquivoExport
                     d.path = unidades[cont] + "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(
                         i);
                     d.compress = unidades[(cont + 1) % unidades.size()] +
-                        "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(i) + ".zip";
+                        "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(i) + ".zlib";
                     cont = (cont + 1) % unidades.size();
                     diretrizes.push_back(d);
                 }
@@ -346,7 +346,7 @@ string Comandos::listAll(string caminhoComando) {
         ifstream arqConfig(unidades[0] + "/mymfs.config");
         string linha;
         string lista;
-        while (getline(arqConfig, linha)){
+        while (getline(arqConfig, linha)) {
             lista += linha + "\n";
         }
         if (lista.length() > 0) {
@@ -718,4 +718,86 @@ void Comandos::ultimas100Linhas(string caminhoComando, string caminhoArquivoToRe
         cout << "O Mymfs nao esta configurado na unidade informada." << endl;
     }
 
+}
+
+vector<unsigned char> compress_string(const char *str, int compressionlevel) {
+    z_stream zs;                        // z_stream is zlib's control structure
+    memset(&zs, 0, sizeof(zs));
+
+    if (deflateInit(&zs, compressionlevel) != Z_OK)
+        throw (std::runtime_error("deflateInit failed while compressing."));
+
+    zs.next_in = (Bytef *) str;
+    zs.avail_in = strlen(reinterpret_cast<const char *>(str));           // set the z_stream's input
+
+    int ret;
+    unsigned char outbuffer[32768];
+    vector<unsigned char> outstring;
+
+    // retrieve the compressed bytes blockwise
+    do {
+        zs.next_out = reinterpret_cast<Bytef *>(outbuffer);
+        zs.avail_out = sizeof(outbuffer);
+
+        ret = deflate(&zs, Z_FINISH);
+
+        if (outstring.size() < zs.total_out) {
+            // append the block to the output string
+            for (unsigned char c : outbuffer) {
+                outstring.push_back(c);
+            }
+        }
+    } while (ret == Z_OK);
+
+    deflateEnd(&zs);
+
+    if (ret != Z_STREAM_END) {          // an error occurred that was not EOF
+        std::ostringstream oss;
+        oss << "Exception during zlib compression: (" << ret << ") " << zs.msg;
+        throw (std::runtime_error(oss.str()));
+    }
+
+    return outstring;
+}
+
+vector<unsigned char> decompress_string(vector<unsigned char> str) {
+    z_stream zs;                        // z_stream is zlib's control structure
+    memset(&zs, 0, sizeof(zs));
+
+    if (inflateInit(&zs) != Z_OK)
+        throw (std::runtime_error("inflateInit failed while decompressing."));
+
+    zs.next_in = (Bytef *) str.data();
+    zs.avail_in = str.size();
+
+    int ret;
+    unsigned char outbuffer[32768];
+    vector<unsigned char> outstring;
+
+    // get the decompressed bytes blockwise using repeated calls to inflate
+    do {
+        zs.next_out = reinterpret_cast<Bytef *>(outbuffer);
+        zs.avail_out = sizeof(outbuffer);
+
+        ret = inflate(&zs, 0);
+
+        if (outstring.size() < zs.total_out) {
+            // append the block to the output string
+            for (unsigned char c : outbuffer) {
+                outstring.push_back(c);
+            }
+        }
+
+    } while (ret == Z_OK);
+
+    inflateEnd(&zs);
+
+    if (ret != Z_STREAM_END) {          // an error occurred that was not EOF
+        std::ostringstream oss;
+        oss << "Exception during zlib decompression: (" << ret << ") "
+            << zs.msg;
+        throw (std::runtime_error(oss.str()));
+    }
+
+    return outstring;
 }

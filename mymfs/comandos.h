@@ -7,11 +7,11 @@ class Comandos {
  private:
   const int sizeFileMax = 512000;          //Define o tamanho maximo dos arquivos como 500KB
   const int sizeFileConfig = 51200;
-  const int numThreads = 4;
+  const int numThreads = 1;
 
   struct Diretrizes {
-    int inicio;
-    int length;
+    long inicio;
+    long length;
     string path;
     string compress;
   };
