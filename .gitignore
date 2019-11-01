@@ -3,6 +3,9 @@ directory
 cmake-build-debug/
 UOEncryption/
 
+files
+*.tar.gz
+
 # Prerequisites
 *.d
 
