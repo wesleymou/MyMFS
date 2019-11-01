@@ -7,7 +7,7 @@ class Comandos {
  private:
   const int sizeFileMax = 512000;          //Define o tamanho maximo dos arquivos como 500KB
   const int sizeFileConfig = 51200;
-  const int numThreads = 1;
+  const int numThreads = 4;
 
   struct Diretrizes {
     long inicio;
@@ -20,6 +20,7 @@ class Comandos {
     string arquivo;
     string extensao;
     int quantidade;
+    int tamanho;
   };
 
   bool mymfsEstaConfigurado(string caminhoComando);
@@ -32,7 +33,11 @@ class Comandos {
 
   void escritaParalela(vector<Diretrizes> *d, string filePath, int i, int th);
 
-  void leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th);
+  void leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th, ofstream *outfile);
+
+  vector<unsigned char> compress_string(const char *str, int compressionlevel = 9);
+
+  vector<unsigned char> decompress_string(vector<unsigned char> str);
 
  public:
 

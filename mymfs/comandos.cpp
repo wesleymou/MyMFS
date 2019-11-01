@@ -14,20 +14,13 @@
 namespace fsys = std::experimental::filesystem;
 using namespace std;
 
-vector<unsigned char> compress_string(const char *str, int compressionlevel = Z_BEST_COMPRESSION);
-
-vector<unsigned char> decompress_string(vector<unsigned char> str);
-
 bool Comandos::mymfsEstaConfigurado(string caminhoComando) {
     if (!fsys::exists(caminhoComando))
         return false;
-    ifstream arquivoConfig(caminhoComando);
+    ifstream arquivoConfig(caminhoComando, ios_base::in);
     string line;
-    int cont = 0;
     while (getline(arquivoConfig, line)) {
-        if (fsys::exists(line + "/mymfs.config")) {
-            return true;
-        } else if (fsys::exists(line + "/mymfs.config")) {
+        if (fsys::exists(line + "mymfs.config")) {
             return true;
         }
     }
@@ -89,6 +82,9 @@ int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string ca
             size_t x = linha.find_first_of("-");
             size_t y = linha.find_last_of("-");
 
+            linhaConfig->tamanho = stoi(linha.substr(y + 1, string::npos));
+            linha.erase(y, string::npos);
+            y = linha.find_last_of("-");
             linhaConfig->extensao = linha.substr(0, x);
             linhaConfig->arquivo = linha.substr(x + 1, y - x - 1);
             linhaConfig->quantidade = stoi(linha.substr(y + 1, string::npos));
@@ -107,26 +103,28 @@ void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, in
         infile.seekg(diretrizes[i].inicio);
         infile.read(buffer, diretrizes[i].length);
 
-        ofstream outfile(diretrizes[i].path + "/" + to_string(i), ofstream::binary);
-        outfile << buffer;
-        outfile.close();
+        if (fsys::exists(diretrizes[i].path)) {
+            ofstream outfile(diretrizes[i].path + "/" + to_string(i), ofstream::binary);
+            outfile << buffer;
+            outfile.close();
+        }
+        if (fsys::exists(diretrizes[i].compress)) {
+            vector<unsigned char> buffer_compresss = compress_string(buffer);
 
-        vector<unsigned char> buffer_compresss = compress_string(buffer);
-
-        ofstream compressFile(diretrizes[i].compress + "/" + to_string(i) + ".zlib", ofstream::binary);
-        compressFile.write(reinterpret_cast<const char *>(buffer_compresss.data()), buffer_compresss.size());
-        streampos x = compressFile.tellp();
-        compressFile.close();
+            ofstream compressFile(diretrizes[i].compress + "/" + to_string(i) + ".zlib", ofstream::binary);
+            compressFile.write(reinterpret_cast<const char *>(buffer_compresss.data()), buffer_compresss.size());
+            streampos x = compressFile.tellp();
+            compressFile.close();
+        }
     }
     infile.close();
 }
 
-void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th) {
+void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th, ofstream *outfile) {
     vector<Diretrizes> diretrizes = *d;
-    ofstream outfile(filePath, ifstream::binary);
+//    ofstream outfile(filePath, ifstream::binary);
 
     for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
-
         if (fsys::exists(diretrizes[i].path)) {
             ifstream infile(diretrizes[i].path, ios::in | ios::binary | ios::ate);
             int size = infile.tellg();
@@ -134,8 +132,8 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
             infile.seekg(0, ios::beg);
             infile.read(buffer, size);
 
-            outfile.seekp(diretrizes[i].inicio);
-            outfile << buffer;
+            outfile->seekp(diretrizes[i].inicio);
+            outfile->write(buffer, size);
 
             infile.close();
         } else if (fsys::exists(diretrizes[i].compress)) {
@@ -148,14 +146,16 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
 
             vector<unsigned char> descompress = decompress_string(compress_buffer);
 
-            outfile.seekp(diretrizes[i].inicio);
-            outfile.write(reinterpret_cast<const char *>(descompress.data()), descompress.size());
+            outfile->seekp(diretrizes[i].inicio);
+            outfile->write(reinterpret_cast<const char *>(descompress.data()), descompress.size());
+
+            infile.close();
         } else {
             cout << "arquivo corrompido" << endl;
             return;
         }
     }
-    outfile.close();
+//    outfile.close();
 }
 
 string Comandos::config(string caminhoComando, int length, char **unidades) {
@@ -213,7 +213,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
     }
 
     for (int i = 0; i < unidades.size(); ++i) {
-        if (!fsys::exists(unidades[i] + "files")) {
+        if (fsys::exists(unidades[i])&&!fsys::exists(unidades[i] + "files")) {
             fsys::create_directory(unidades[i] + "files");
         }
     }
@@ -246,7 +246,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
                 } else {
                     d.length = this->sizeFileMax;
                 }
-                if (!fsys::exists(unidades[cont] + "files/" + nomeDiretorio)) {
+                if (fsys::exists(unidades[cont]) && !fsys::exists(unidades[cont] + "files/" + nomeDiretorio)) {
                     fsys::create_directory(unidades[cont] + "files/" + nomeDiretorio);
                 }
                 diretrizes.push_back(d);
@@ -265,7 +265,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
             }
 
             string linhaConfig;
-            linhaConfig = nomeDiretorio + "-" + to_string(numArquivos) + "\n";
+            linhaConfig = nomeDiretorio + "-" + to_string(numArquivos) + "-" + to_string(end);
             ofstream arqConfig(unidades[0] + "/mymfs.config", ios_base::app | ios_base::out);
             arqConfig << linhaConfig
                       << endl; //Adiciona o arquivo importado no arquivo de configuração (nomeArquivo;quantidadeArquivos)
@@ -286,7 +286,6 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
 }
 
 string Comandos::exportarArquivo(string caminhoComando, string nomeArquivoExport, string caminhoDiretorioExport) {
-
     //Verifica se o arquivo de configuração e se o arquivo a ser exportado existem
     if (mymfsEstaConfigurado(caminhoComando)) {
         LinhaConfig linhaConfig;
@@ -311,21 +310,30 @@ string Comandos::exportarArquivo(string caminhoComando, string nomeArquivoExport
                     diretrizes.push_back(d);
                 }
 
-                this->leituraParalela(&diretrizes,
-                                      caminhoDiretorioExport + "/" + linhaConfig.arquivo + "." + linhaConfig.extensao,
-                                      0,
-                                      1);
 
-//                vector<std::thread> threads;
-//                for (int i = 0; i < this->numThreads; ++i) {
-//                    threads.push_back(std::thread(&Comandos::leituraParalela, this,
-//                                                  &diretrizes, caminhoDiretorioExport + "/" + linhaConfig.arquivo + "." + linhaConfig.extensao, i, this->numThreads));
-//                }
-//
-//                for (std::thread &th : threads) {
-//                    if (th.joinable())
-//                        th.join();
-//                }
+                ofstream arquivoPrototipo;
+                arquivoPrototipo.rdbuf()->pubsetbuf(0, 0);
+//                arquivoPrototipo.sync_with_stdio(true);
+                arquivoPrototipo.open(caminhoDiretorioExport + "/" + linhaConfig.arquivo + "." + linhaConfig.extensao,
+                                      ios::ate);
+
+                vector<std::thread> threads;
+                for (int i = 0; i < this->numThreads; ++i) {
+                    threads.push_back(std::thread(&Comandos::leituraParalela, this,
+                                                  &diretrizes,
+                                                  caminhoDiretorioExport + "/" + linhaConfig.arquivo + "." + linhaConfig.extensao,
+                                                  i,
+                                                  this->numThreads,
+                                                  &arquivoPrototipo));
+                }
+
+                for (std::thread &th : threads) {
+                    if (th.joinable())
+                        th.join();
+                }
+
+                arquivoPrototipo.close();
+
                 return "Arquivo <" + nomeArquivoExport + "> foi exportado para <" + caminhoDiretorioExport + "> com sucesso.";
             } else {
                 return "Operacao nao realizada! O arquivo <" + nomeArquivoExport + "> ja existe na pasta destino";
@@ -720,7 +728,7 @@ void Comandos::ultimas100Linhas(string caminhoComando, string caminhoArquivoToRe
 
 }
 
-vector<unsigned char> compress_string(const char *str, int compressionlevel) {
+vector<unsigned char> Comandos::compress_string(const char *str, int compressionlevel) {
     z_stream zs;                        // z_stream is zlib's control structure
     memset(&zs, 0, sizeof(zs));
 
@@ -760,7 +768,7 @@ vector<unsigned char> compress_string(const char *str, int compressionlevel) {
     return outstring;
 }
 
-vector<unsigned char> decompress_string(vector<unsigned char> str) {
+vector<unsigned char> Comandos::decompress_string(vector<unsigned char> str) {
     z_stream zs;                        // z_stream is zlib's control structure
     memset(&zs, 0, sizeof(zs));
 
