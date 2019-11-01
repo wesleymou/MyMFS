@@ -1,13 +1,20 @@
 #include <vector>
 #include <string>
+#include <mutex>
+
+#define VERDE true
+#define VERMELHO false
 
 using namespace std;
 
 class Comandos {
  private:
+
   const int sizeFileMax = 512000;          //Define o tamanho maximo dos arquivos como 500KB
   const int sizeFileConfig = 51200;
   const int numThreads = 4;
+
+  std::mutex monitor_thread;
 
   struct Diretrizes {
     long inicio;
@@ -23,17 +30,22 @@ class Comandos {
     int tamanho;
   };
 
+  struct NomeExtensao {
+    string nome;
+    string extensao;
+  };
+
   bool mymfsEstaConfigurado(string caminhoComando);
 
   vector<string> obterUnidades(string path);
 
-  string *nomeExtensao(string path);
+  NomeExtensao nomeExtensao(string path);
 
   int verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo);
 
   void escritaParalela(vector<Diretrizes> *d, string filePath, int i, int th);
 
-  void leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th, ofstream *outfile);
+  void leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th);
 
   vector<unsigned char> compress_string(const char *str, int compressionlevel = 9);
 

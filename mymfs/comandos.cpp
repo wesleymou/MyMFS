@@ -10,6 +10,7 @@
 #include <experimental/filesystem>
 #include <cstring>
 #include <assert.h>
+#include <mutex>
 
 namespace fsys = std::experimental::filesystem;
 using namespace std;
@@ -42,22 +43,21 @@ vector<string> Comandos::obterUnidades(string path) {
     return unidades;
 }
 
-string *Comandos::nomeExtensao(string path) {
-    string nomeArquivo = path;
-    string *retorno = new string[2];
-    const size_t last_slash_idx = nomeArquivo.find_last_of("/");
-    if (std::string::npos != last_slash_idx) {
-        nomeArquivo.erase(0, last_slash_idx + 1);
+Comandos::NomeExtensao Comandos::nomeExtensao(string path) {
+    NomeExtensao nome_arquivo;
+    size_t findChar = path.find_last_of("/");
+    if (std::string::npos != findChar) {
+        path.erase(0, findChar + 1);
     }
 
-    size_t extension_point = nomeArquivo.find_last_of(".");
-    string extensaoArquivo;
-    if (std::string::npos != extension_point) {
-        retorno[1] = nomeArquivo.substr(extension_point + 1);
-        nomeArquivo.erase(extension_point, nomeArquivo.length());
+findChar = path.find_last_of(".");
+
+    if (std::string::npos != findChar) {
+        nome_arquivo.extensao = path.substr(findChar + 1);
+        path.erase(findChar, path.length());
     }
-    retorno[0] = nomeArquivo;
-    return retorno;
+    nome_arquivo.nome = path;
+    return nome_arquivo;
 }
 
 int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo) {
@@ -72,8 +72,8 @@ int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string ca
         return 1;
     }
 
-    string *nomeExtensao = this->nomeExtensao(nomeArquivo);
-    string arquivoProcurado = nomeExtensao[1] + "-" + nomeExtensao[0];
+    NomeExtensao nomeExtensao = this->nomeExtensao(nomeArquivo);
+    string arquivoProcurado = nomeExtensao.extensao + "-" + nomeExtensao.nome;
     string linha;
 
     while (getline(arqConfig, linha)) {
@@ -120,9 +120,9 @@ void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, in
     infile.close();
 }
 
-void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th, ofstream *outfile) {
+void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th) {
     vector<Diretrizes> diretrizes = *d;
-//    ofstream outfile(filePath, ifstream::binary);
+    ofstream outfile(filePath, ifstream::binary);
 
     for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
         if (fsys::exists(diretrizes[i].path)) {
@@ -132,11 +132,12 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
             infile.seekg(0, ios::beg);
             infile.read(buffer, size);
 
-            outfile->seekp(diretrizes[i].inicio);
-            outfile->write(buffer, size);
+            outfile.seekp(diretrizes[i].inicio);
+            outfile.write(buffer, size);
 
             infile.close();
         } else if (fsys::exists(diretrizes[i].compress)) {
+            std::unique_lock<std::mutex> lck (monitor_thread,std::defer_lock);
             ifstream infile = ifstream(diretrizes[i].compress, ios::in | ios::binary | ios::ate);
             int size = infile.tellg();
 
@@ -146,8 +147,11 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
 
             vector<unsigned char> descompress = decompress_string(compress_buffer);
 
-            outfile->seekp(diretrizes[i].inicio);
-            outfile->write(reinterpret_cast<const char *>(descompress.data()), descompress.size());
+            lck.lock();
+            outfile.seekp(diretrizes[i].inicio);
+            outfile.write(reinterpret_cast<const char *>(descompress.data()), descompress.size());
+            outfile.flush();
+            lck.unlock();
 
             infile.close();
         } else {
@@ -155,7 +159,7 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
             return;
         }
     }
-//    outfile.close();
+    outfile.close();
 }
 
 string Comandos::config(string caminhoComando, int length, char **unidades) {
@@ -221,15 +225,13 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
     if (fsys::exists(caminhoArquivoImport)) {
 
         //Obtem o nome do diretório a ser criado para o arquivo atraves do seu nome
-        string *nomeArquivo = nomeExtensao(caminhoArquivoImport);
+        NomeExtensao nomeArquivo = nomeExtensao(caminhoArquivoImport);
         LinhaConfig null;
-        if (this->verificarArquivoExisteEmConfig(&null, caminhoComando, nomeArquivo[0] + "." + nomeArquivo[1]) == 1) {
-            string nomeDiretorio = nomeArquivo[1] + "-" + nomeArquivo[0];
+        if (this->verificarArquivoExisteEmConfig(&null, caminhoComando, nomeArquivo.nome + "." + nomeArquivo.extensao) == 1) {
+            string nomeDiretorio = nomeArquivo.extensao + "-" + nomeArquivo.nome;
 
-            ifstream infile(caminhoArquivoImport, ifstream::binary);
-            infile.seekg(0, ios::end);
+            ifstream infile(caminhoArquivoImport, ifstream::binary|ios_base::ate);
             end = infile.tellg();
-            infile.seekg(0, ios::beg);
             infile.close();
 
             int numArquivos = ceil((float) end / (float) this->sizeFileMax); // Verifica quantos arquivos de 500 KB ou menos serão criados
@@ -310,29 +312,19 @@ string Comandos::exportarArquivo(string caminhoComando, string nomeArquivoExport
                     diretrizes.push_back(d);
                 }
 
-
-                ofstream arquivoPrototipo;
-                arquivoPrototipo.rdbuf()->pubsetbuf(0, 0);
-//                arquivoPrototipo.sync_with_stdio(true);
-                arquivoPrototipo.open(caminhoDiretorioExport + "/" + linhaConfig.arquivo + "." + linhaConfig.extensao,
-                                      ios::ate);
-
                 vector<std::thread> threads;
                 for (int i = 0; i < this->numThreads; ++i) {
                     threads.push_back(std::thread(&Comandos::leituraParalela, this,
                                                   &diretrizes,
                                                   caminhoDiretorioExport + "/" + linhaConfig.arquivo + "." + linhaConfig.extensao,
                                                   i,
-                                                  this->numThreads,
-                                                  &arquivoPrototipo));
+                                                  this->numThreads));
                 }
 
                 for (std::thread &th : threads) {
                     if (th.joinable())
                         th.join();
                 }
-
-                arquivoPrototipo.close();
 
                 return "Arquivo <" + nomeArquivoExport + "> foi exportado para <" + caminhoDiretorioExport + "> com sucesso.";
             } else {
