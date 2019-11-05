@@ -17,7 +17,8 @@ class Comandos {
 
   const int sizeFileMax = 512000;          //Define o tamanho maximo dos arquivos como 500KB
   const int sizeFileConfig = 51200;
-  const int numThreads = 4;
+  const int numThreads = 1;
+  const string configFileName = "mymfs.config";
 
   std::mutex monitor_thread;
 
@@ -35,16 +36,11 @@ class Comandos {
     int tamanho;
   };
 
-  struct NomeExtensao {
-    string nome;
-    string extensao;
-  };
-
   bool mymfsEstaConfigurado(string caminhoComando);
 
   vector<string> obterUnidades(string path);
 
-  NomeExtensao nomeExtensao(string path);
+  LinhaConfig nomeExtensao(string path);
 
   int verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo);
 
@@ -52,9 +48,11 @@ class Comandos {
 
   void leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th);
 
-  vector<unsigned char> compress_string(const char *str, int compressionlevel = 9);
+  vector<unsigned char> compress_string(vector<unsigned char> str, int compressionlevel = 9);
 
   vector<unsigned char> decompress_string(vector<unsigned char> str);
+
+  LinhaConfig converterLinhaConfigParaNomeArquivo(string linhaConfig);
 
  public:
 
@@ -65,8 +63,6 @@ class Comandos {
   string exportarArquivo(string caminhoComando, string nomeArquivoExport, string caminhoDiretorioExport);
 
   string listAll(string caminhoComando);
-
-  string converterLinhaConfigParaNomeArquivo(string linhaConfig);
 
   void remove(string caminhoComando, string nomeArquivo);
 

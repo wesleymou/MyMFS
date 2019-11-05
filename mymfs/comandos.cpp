@@ -2,14 +2,12 @@
 #include <zlib.h>
 #include <vector>
 #include <thread>
-#include <future>
 #include <iostream>
 #include <fstream>
 #include <math.h>
 #include <string>
 #include <experimental/filesystem>
 #include <cstring>
-#include <assert.h>
 #include <mutex>
 
 namespace fsys = std::experimental::filesystem;
@@ -21,7 +19,7 @@ bool Comandos::mymfsEstaConfigurado(string caminhoComando) {
     ifstream arquivoConfig(caminhoComando, ios_base::in);
     string line;
     while (getline(arquivoConfig, line)) {
-        if (fsys::exists(line + "mymfs.config")) {
+        if (fsys::exists(line + configFileName)) {
             return true;
         }
     }
@@ -43,37 +41,36 @@ vector<string> Comandos::obterUnidades(string path) {
     return unidades;
 }
 
-Comandos::NomeExtensao Comandos::nomeExtensao(string path) {
-    NomeExtensao nome_arquivo;
+Comandos::LinhaConfig Comandos::nomeExtensao(string path) {
+    LinhaConfig nome_arquivo;
     size_t findChar = path.find_last_of("/");
     if (std::string::npos != findChar) {
         path.erase(0, findChar + 1);
     }
 
-findChar = path.find_last_of(".");
+    findChar = path.find_last_of(".");
 
     if (std::string::npos != findChar) {
         nome_arquivo.extensao = path.substr(findChar + 1);
         path.erase(findChar, path.length());
     }
-    nome_arquivo.nome = path;
+    nome_arquivo.arquivo = path;
     return nome_arquivo;
 }
 
 int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo) {
     ifstream arqConfig;
-//    LinhaConfig linhaConfig = *linha_config;
     vector<string> unidades = this->obterUnidades(caminhoComando);
-    if (fsys::exists(unidades[0] + "/mymfs.config")) {
-        arqConfig = ifstream(unidades[0] + "/mymfs.config");
-    } else if (fsys::exists(unidades[1] + "/mymfs.config")) {
-        arqConfig = ifstream(unidades[1] + "/mymfs.config");
+    if (fsys::exists(unidades[0] + "/" + configFileName)) {
+        arqConfig = ifstream(unidades[0] + "/" + configFileName);
+    } else if (fsys::exists(unidades[1] + "/" + configFileName)) {
+        arqConfig = ifstream(unidades[1] + "/" + configFileName);
     } else {
         return 1;
     }
 
-    NomeExtensao nomeExtensao = this->nomeExtensao(nomeArquivo);
-    string arquivoProcurado = nomeExtensao.extensao + "-" + nomeExtensao.nome;
+    LinhaConfig nomeExtensao = this->nomeExtensao(nomeArquivo);
+    string arquivoProcurado = nomeExtensao.extensao + "-" + nomeExtensao.arquivo;
     string linha;
 
     while (getline(arqConfig, linha)) {
@@ -96,24 +93,25 @@ int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string ca
 
 void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, int th) {
     vector<Diretrizes> diretrizes = *d;
-    ifstream infile(filePath, ifstream::binary);
+    ifstream infile(filePath, ifstream::in|ifstream::binary);
     for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
-        char *buffer = new char[diretrizes[i].length];
+        vector<unsigned char> buffer(diretrizes[i].length);
 
         infile.seekg(diretrizes[i].inicio);
-        infile.read(buffer, diretrizes[i].length);
+        infile.read(reinterpret_cast<char *>(&buffer[0]), diretrizes[i].length);
 
         if (fsys::exists(diretrizes[i].path)) {
-            ofstream outfile(diretrizes[i].path + "/" + to_string(i), ofstream::binary);
-            outfile << buffer;
+            ofstream outfile(diretrizes[i].path + "/" + to_string(i), ofstream::out|ofstream::binary);
+            outfile.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
+            outfile.flush();
             outfile.close();
         }
         if (fsys::exists(diretrizes[i].compress)) {
             vector<unsigned char> buffer_compresss = compress_string(buffer);
 
-            ofstream compressFile(diretrizes[i].compress + "/" + to_string(i) + ".zlib", ofstream::binary);
+            ofstream compressFile(diretrizes[i].compress + "/" + to_string(i) + ".compress", ofstream::out|ofstream::binary);
             compressFile.write(reinterpret_cast<const char *>(buffer_compresss.data()), buffer_compresss.size());
-            streampos x = compressFile.tellp();
+            compressFile.flush();
             compressFile.close();
         }
     }
@@ -122,23 +120,25 @@ void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, in
 
 void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th) {
     vector<Diretrizes> diretrizes = *d;
-    ofstream outfile(filePath, ifstream::binary);
+    ofstream outfile(filePath, ofstream::out|ofstream::binary);
 
     for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
         if (fsys::exists(diretrizes[i].path)) {
             ifstream infile(diretrizes[i].path, ios::in | ios::binary | ios::ate);
             int size = infile.tellg();
-            char *buffer = new char[size];
+
+            vector<unsigned char> buffer(size);
             infile.seekg(0, ios::beg);
-            infile.read(buffer, size);
+            infile.read(reinterpret_cast<char *>(&buffer[0]), size);
 
             outfile.seekp(diretrizes[i].inicio);
-            outfile.write(buffer, size);
+            outfile.write(reinterpret_cast<const char *>(buffer.data()), size);
+            outfile.flush();
 
             infile.close();
         } else if (fsys::exists(diretrizes[i].compress)) {
-            std::unique_lock<std::mutex> lck (monitor_thread,std::defer_lock);
-            ifstream infile = ifstream(diretrizes[i].compress, ios::in | ios::binary | ios::ate);
+            std::unique_lock<std::mutex> lck(monitor_thread, std::defer_lock);
+            ifstream infile(diretrizes[i].compress, ios::in | ios::binary | ios::ate);
             int size = infile.tellg();
 
             vector<unsigned char> compress_buffer(size);
@@ -173,9 +173,9 @@ string Comandos::config(string caminhoComando, int length, char **unidades) {
     if (mymfsEstaConfigurado(caminhoComando)) {   //Verifica se o arquivo Config ja existe no caminho especificado
         return "O Mymfs ja esta configurado nesta unidade.";
     } else {
-        ofstream arquivoConfig((string) unidades[0] + "/mymfs.config");       //Cria o arquivo config, configurando o Mymfs na unidade especificada
+        ofstream arquivoConfig((string) unidades[0] + "/" + configFileName);       //Cria o arquivo config, configurando o Mymfs na unidade especificada
         arquivoConfig.close();
-        ofstream arquivoConfigCompress((string) unidades[1] + "/mymfs.config");       //Cria o arquivo config, configurando o Mymfs na unidade especificada
+        ofstream arquivoConfigCompress((string) unidades[1] + "/" + configFileName);       //Cria o arquivo config, configurando o Mymfs na unidade especificada
         arquivoConfigCompress.close();
 
         string unidadesString = "";
@@ -202,13 +202,13 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
         unidades = obterUnidades(caminhoComando);
 
         for (int i = 0; i < unidades.size(); ++i) {
-            if (fsys::exists(unidades[i] + "/mymfs.config")) {
-                ifstream arqConfigExiste(unidades[i] + "/mymfs.config");
+            if (fsys::exists(unidades[i] + "/" + configFileName)) {
+                ifstream arqConfigExiste(unidades[i] + "/" + configFileName);
                 arqConfigExiste.seekg(0, ios::end);
                 end = arqConfigExiste.tellg();
                 arqConfigExiste.close();
                 if (end > this->sizeFileConfig) {                          //Apenas permite a importação se o arquivo de config for menor que 50KB
-                    return "Operacao nao realizada! Arquivo mymfs.config esta cheio - Mymfs.";
+                    return "Operacao nao realizada! Arquivo " + configFileName + " esta cheio - Mymfs.";
                 }
             }
         }
@@ -217,7 +217,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
     }
 
     for (int i = 0; i < unidades.size(); ++i) {
-        if (fsys::exists(unidades[i])&&!fsys::exists(unidades[i] + "files")) {
+        if (fsys::exists(unidades[i]) && !fsys::exists(unidades[i] + "files")) {
             fsys::create_directory(unidades[i] + "files");
         }
     }
@@ -225,12 +225,14 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
     if (fsys::exists(caminhoArquivoImport)) {
 
         //Obtem o nome do diretório a ser criado para o arquivo atraves do seu nome
-        NomeExtensao nomeArquivo = nomeExtensao(caminhoArquivoImport);
+        LinhaConfig nomeArquivo = nomeExtensao(caminhoArquivoImport);
         LinhaConfig null;
-        if (this->verificarArquivoExisteEmConfig(&null, caminhoComando, nomeArquivo.nome + "." + nomeArquivo.extensao) == 1) {
-            string nomeDiretorio = nomeArquivo.extensao + "-" + nomeArquivo.nome;
+        if (this->verificarArquivoExisteEmConfig(&null,
+                                                 caminhoComando,
+                                                 nomeArquivo.arquivo + "." + nomeArquivo.extensao) == 1) {
+            string nomeDiretorio = nomeArquivo.extensao + "-" + nomeArquivo.arquivo;
 
-            ifstream infile(caminhoArquivoImport, ifstream::binary|ios_base::ate);
+            ifstream infile(caminhoArquivoImport, ifstream::binary | ios_base::ate);
             end = infile.tellg();
             infile.close();
 
@@ -244,7 +246,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
                 d.compress = unidades[(cont + 1) % unidades.size()] + "files/" + nomeDiretorio;
                 d.inicio = i * this->sizeFileMax;
                 if (i >= (numArquivos - 1)) {
-                    d.length = i * this->sizeFileMax + end;
+                    d.length = (int)end - (i * this->sizeFileMax);
                 } else {
                     d.length = this->sizeFileMax;
                 }
@@ -268,12 +270,12 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
 
             string linhaConfig;
             linhaConfig = nomeDiretorio + "-" + to_string(numArquivos) + "-" + to_string(end);
-            ofstream arqConfig(unidades[0] + "/mymfs.config", ios_base::app | ios_base::out);
+            ofstream arqConfig(unidades[0] + "/" + configFileName, ios_base::app | ios_base::out);
             arqConfig << linhaConfig
                       << endl; //Adiciona o arquivo importado no arquivo de configuração (nomeArquivo;quantidadeArquivos)
             arqConfig.close();
 
-            ofstream arqConfigZip(unidades[1] + "/mymfs.config", ios_base::app | ios_base::out);
+            ofstream arqConfigZip(unidades[1] + "/" + configFileName, ios_base::app | ios_base::out);
             arqConfigZip << linhaConfig
                          << endl; //Adiciona o arquivo importado no arquivo de configuração (nomeArquivo;quantidadeArquivos)
             arqConfigZip.close();
@@ -307,7 +309,7 @@ string Comandos::exportarArquivo(string caminhoComando, string nomeArquivoExport
                     d.path = unidades[cont] + "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(
                         i);
                     d.compress = unidades[(cont + 1) % unidades.size()] +
-                        "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(i) + ".zlib";
+                        "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(i) + ".compress";
                     cont = (cont + 1) % unidades.size();
                     diretrizes.push_back(d);
                 }
@@ -343,7 +345,7 @@ string Comandos::listAll(string caminhoComando) {
     if (mymfsEstaConfigurado(caminhoComando)) {
         //Caso exista, percorre o arquivo buscando os nomes dos diretorios/arquivos e listando-os
         vector<string> unidades = obterUnidades(caminhoComando);
-        ifstream arqConfig(unidades[0] + "/mymfs.config");
+        ifstream arqConfig(unidades[0] + "/" + configFileName);
         string linha;
         string lista;
         while (getline(arqConfig, linha)) {
@@ -359,12 +361,22 @@ string Comandos::listAll(string caminhoComando) {
     }
 }
 
-string Comandos::converterLinhaConfigParaNomeArquivo(string linhaConfig) {
-    return "";
+Comandos::LinhaConfig Comandos::converterLinhaConfigParaNomeArquivo(string linha) {
+    LinhaConfig nomeArquivo;
+    size_t x = linha.find_first_of("-");
+    size_t y = linha.find_last_of("-");
+
+    nomeArquivo.tamanho = stoi(linha.substr(y + 1, string::npos));
+    linha.erase(y, string::npos);
+    y = linha.find_last_of("-");
+    nomeArquivo.extensao = linha.substr(0, x);
+    nomeArquivo.arquivo = linha.substr(x + 1, y - x - 1);
+    nomeArquivo.quantidade = stoi(linha.substr(y + 1, string::npos));
+    return nomeArquivo;
 }
 
 void Comandos::remove(string caminhoComando, string nomeArquivo) {
-    ifstream arqConfig(caminhoComando + "/mymfs.config");
+    ifstream arqConfig(caminhoComando + "/" + configFileName);
 
     if (nomeArquivo.empty()) {
         cout << "Deve-se informar o nome do arquivo";
@@ -376,14 +388,14 @@ void Comandos::remove(string caminhoComando, string nomeArquivo) {
         string linhaConfig;
         string linhaConfigNovo = "";
         string configNovo = "";
-        string nomeArquivoEncontrado = "";
+        LinhaConfig nomeArquivoEncontrado;
 
         if (!linhaConfig.empty()) {
             do {
                 getline(arqConfig, linhaConfigNovo);
                 if (linhaConfigNovo.length() > 0) {
                     nomeArquivoEncontrado = converterLinhaConfigParaNomeArquivo(linhaConfigNovo);
-                    if ((strcmp(nomeArquivoEncontrado.c_str(), nomeArquivo.c_str())) != 0) {
+                    if (nomeArquivoEncontrado.arquivo != nomeArquivo) {
                         configNovo += (linhaConfigNovo + "\n");
                     }
                 }
@@ -391,7 +403,7 @@ void Comandos::remove(string caminhoComando, string nomeArquivo) {
 
             arqConfig.close();
 
-            ofstream arquivoConfig(caminhoComando + "/mymfs.config", std::ofstream::out | std::ofstream::trunc);
+            ofstream arquivoConfig(caminhoComando + "/" + configFileName, std::ofstream::out | std::ofstream::trunc);
             arquivoConfig << configNovo;
             arquivoConfig.close();
 
@@ -414,7 +426,7 @@ void Comandos::removeAll(string caminhoComando) {
     if (mymfsEstaConfigurado(caminhoComando)) {
         if (fsys::exists(caminhoComando + "/files")) {
             fsys::remove_all(caminhoComando + "/files");
-            arquivoConfig.open(caminhoComando + "/mymfs.config", std::ofstream::out | std::ofstream::trunc);
+            arquivoConfig.open(caminhoComando + "/" + configFileName, std::ofstream::out | std::ofstream::trunc);
             arquivoConfig.close();
             cout << "Os arquivos do Mymfs foram removidos com sucesso." << endl;
             return;
@@ -427,7 +439,7 @@ void Comandos::removeAll(string caminhoComando) {
 }
 
 void Comandos::procuraPalavra(string caminhoComando, string palavra, string caminhoArquivoToRead) {
-    ifstream arqConfigExiste(caminhoComando + "/mymfs.config");
+    ifstream arqConfigExiste(caminhoComando + "/" + configFileName);
 
     //Verifica se o arquivo de configuração e se o arquivo a ser exportado existem
     if (!caminhoArquivoToRead.empty() && mymfsEstaConfigurado(caminhoComando)) {
@@ -506,7 +518,7 @@ void Comandos::procuraPalavra(string caminhoComando, string palavra, string cami
 
 void Comandos::primeiras100Linhas(string caminhoComando, string caminhoArquivoToRead) {
 
-    ifstream arqConfigExiste(caminhoComando + "/mymfs.config");
+    ifstream arqConfigExiste(caminhoComando + "/" + configFileName);
 
     //Verifica se o arquivo de configuração e se o arquivo a ser exportado existem
     if (!caminhoArquivoToRead.empty() && mymfsEstaConfigurado(caminhoComando)) {
@@ -579,7 +591,7 @@ void Comandos::primeiras100Linhas(string caminhoComando, string caminhoArquivoTo
 }
 
 void Comandos::ultimas100Linhas(string caminhoComando, string caminhoArquivoToRead) {
-    ifstream arqConfigExiste(caminhoComando + "/mymfs.config");
+    ifstream arqConfigExiste(caminhoComando + "/" + configFileName);
 
     //Verifica se o arquivo de configuração e se o arquivo existem
     if (!caminhoArquivoToRead.empty() && mymfsEstaConfigurado(caminhoComando)) {
@@ -720,15 +732,15 @@ void Comandos::ultimas100Linhas(string caminhoComando, string caminhoArquivoToRe
 
 }
 
-vector<unsigned char> Comandos::compress_string(const char *str, int compressionlevel) {
+vector<unsigned char> Comandos::compress_string(vector<unsigned char> str, int compressionlevel) {
     z_stream zs;                        // z_stream is zlib's control structure
     memset(&zs, 0, sizeof(zs));
 
     if (deflateInit(&zs, compressionlevel) != Z_OK)
         throw (std::runtime_error("deflateInit failed while compressing."));
 
-    zs.next_in = (Bytef *) str;
-    zs.avail_in = strlen(reinterpret_cast<const char *>(str));           // set the z_stream's input
+    zs.next_in = (Bytef *) str.data();
+    zs.avail_in = str.size();           // set the z_stream's input
 
     int ret;
     unsigned char outbuffer[32768];
