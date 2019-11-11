@@ -93,7 +93,7 @@ int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string ca
 
 void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, int th) {
     vector<Diretrizes> diretrizes = *d;
-    ifstream infile(filePath, ifstream::in|ifstream::binary);
+    ifstream infile(filePath, ifstream::in | ifstream::binary);
     for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
         vector<unsigned char> buffer(diretrizes[i].length);
 
@@ -101,7 +101,7 @@ void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, in
         infile.read(reinterpret_cast<char *>(&buffer[0]), diretrizes[i].length);
 
         if (fsys::exists(diretrizes[i].path)) {
-            ofstream outfile(diretrizes[i].path + "/" + to_string(i), ofstream::out|ofstream::binary);
+            ofstream outfile(diretrizes[i].path + "/" + to_string(i), ofstream::out | ofstream::binary);
             outfile.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
             outfile.flush();
             outfile.close();
@@ -109,7 +109,8 @@ void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, in
         if (fsys::exists(diretrizes[i].compress)) {
             vector<unsigned char> buffer_compresss = compress_string(buffer);
 
-            ofstream compressFile(diretrizes[i].compress + "/" + to_string(i) + ".compress", ofstream::out|ofstream::binary);
+            ofstream compressFile(diretrizes[i].compress + "/" + to_string(i) + ".compress",
+                                  ofstream::out | ofstream::binary);
             compressFile.write(reinterpret_cast<const char *>(buffer_compresss.data()), buffer_compresss.size());
             compressFile.flush();
             compressFile.close();
@@ -120,7 +121,7 @@ void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, in
 
 void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th) {
     vector<Diretrizes> diretrizes = *d;
-    ofstream outfile(filePath, ofstream::out|ofstream::binary);
+    ofstream outfile(filePath, ofstream::out | ofstream::binary);
 
     for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
         if (fsys::exists(diretrizes[i].path)) {
@@ -246,7 +247,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
                 d.compress = unidades[(cont + 1) % unidades.size()] + "files/" + nomeDiretorio;
                 d.inicio = i * this->sizeFileMax;
                 if (i >= (numArquivos - 1)) {
-                    d.length = (int)end - (i * this->sizeFileMax);
+                    d.length = (int) end - (i * this->sizeFileMax);
                 } else {
                     d.length = this->sizeFileMax;
                 }
@@ -345,11 +346,13 @@ string Comandos::listAll(string caminhoComando) {
     if (mymfsEstaConfigurado(caminhoComando)) {
         //Caso exista, percorre o arquivo buscando os nomes dos diretorios/arquivos e listando-os
         vector<string> unidades = obterUnidades(caminhoComando);
-        ifstream arqConfig(unidades[0] + "/" + configFileName);
+        ifstream arqConfig;
+
         string linha;
-        string lista;
+        string lista = "";
         while (getline(arqConfig, linha)) {
-            lista += linha + "\n";
+            LinhaConfig linhaConvertida = converterLinhaConfigParaNomeArquivo(linha);
+            lista += linhaConvertida.arquivo + "." + linhaConvertida.extensao + "\n";
         }
         if (lista.length() > 0) {
             return lista;
@@ -421,20 +424,20 @@ void Comandos::remove(string caminhoComando, string nomeArquivo) {
     }
 }
 
-void Comandos::removeAll(string caminhoComando) {
-    ofstream arquivoConfig;
+string Comandos::removeAll(string caminhoComando) {
     if (mymfsEstaConfigurado(caminhoComando)) {
-        if (fsys::exists(caminhoComando + "/files")) {
-            fsys::remove_all(caminhoComando + "/files");
-            arquivoConfig.open(caminhoComando + "/" + configFileName, std::ofstream::out | std::ofstream::trunc);
-            arquivoConfig.close();
-            cout << "Os arquivos do Mymfs foram removidos com sucesso." << endl;
-            return;
-        } else {
-            cout << "Operacao nao realizada! O Mymfs nao possui arquivos gravados, portanto nao foram removidos.";
+        vector<string> unidades = obterUnidades(caminhoComando);
+
+        for (auto unidade : unidades){
+            if (fsys::exists(unidade + "files"))
+                fsys::remove_all(unidade + "files");
+            if (fsys::exists(unidade + configFileName))
+                fsys::remove(unidade + configFileName);
         }
+        fsys::remove(caminhoComando);
+        return "Os arquivos do Mymfs foram removidos com sucesso.";
     } else {
-        cout << "O Mymfs nao esta configurado na unidade informada." << endl;
+        return "O Mymfs nao esta configurado na unidade informada.";
     }
 }
 

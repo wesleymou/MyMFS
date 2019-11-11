@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
             } else
                 cout << "Comando remove incorreto." << endl;
         } else if (comando == "removeall") {
-            comandos.removeAll(caminhoComando);
+            cout << comandos.removeAll(caminhoComando) << endl;
         } else if (comando == "grep") {
             if (argc == 5) {
                 string palavra = argv[3];    //Palavra que será procurado no arquivo

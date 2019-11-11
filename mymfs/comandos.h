@@ -66,7 +66,7 @@ class Comandos {
 
   void remove(string caminhoComando, string nomeArquivo);
 
-  void removeAll(string caminhoComando);
+  string removeAll(string caminhoComando);
 
   void procuraPalavra(string caminhoComando, string palavra, string caminhoArquivoToRead);
 
