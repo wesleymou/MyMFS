@@ -41,7 +41,7 @@ vector<string> Comandos::obterUnidades(string path) {
     return unidades;
 }
 
-Comandos::LinhaConfig Comandos::nomeExtensao(string path) {
+Comandos::LinhaConfig Comandos::separarNomeExtensao(string path) {
     LinhaConfig nome_arquivo;
     size_t findChar = path.find_last_of("/");
     if (std::string::npos != findChar) {
@@ -69,7 +69,7 @@ int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string ca
         return 1;
     }
 
-    LinhaConfig nomeExtensao = this->nomeExtensao(nomeArquivo);
+    LinhaConfig nomeExtensao = this->separarNomeExtensao(nomeArquivo);
     string arquivoProcurado = nomeExtensao.extensao + "-" + nomeExtensao.arquivo;
     string linha;
 
@@ -226,7 +226,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
     if (fsys::exists(caminhoArquivoImport)) {
 
         //Obtem o nome do diretório a ser criado para o arquivo atraves do seu nome
-        LinhaConfig nomeArquivo = nomeExtensao(caminhoArquivoImport);
+        LinhaConfig nomeArquivo = separarNomeExtensao(caminhoArquivoImport);
         LinhaConfig null;
         if (this->verificarArquivoExisteEmConfig(&null,
                                                  caminhoComando,
@@ -346,7 +346,14 @@ string Comandos::listAll(string caminhoComando) {
     if (mymfsEstaConfigurado(caminhoComando)) {
         //Caso exista, percorre o arquivo buscando os nomes dos diretorios/arquivos e listando-os
         vector<string> unidades = obterUnidades(caminhoComando);
+
         ifstream arqConfig;
+        for (auto unidade : unidades) {
+            if (fsys::exists(unidade + configFileName)) {
+                arqConfig = ifstream(unidade + configFileName);
+                break;
+            }
+        }
 
         string linha;
         string lista = "";
@@ -354,7 +361,7 @@ string Comandos::listAll(string caminhoComando) {
             LinhaConfig linhaConvertida = converterLinhaConfigParaNomeArquivo(linha);
             lista += linhaConvertida.arquivo + "." + linhaConvertida.extensao + "\n";
         }
-        if (lista.length() > 0) {
+        if (lista.length()) {
             return lista;
         } else {
             return "Nao ha arquivos salvos pelo Mymfs!";
@@ -378,48 +385,47 @@ Comandos::LinhaConfig Comandos::converterLinhaConfigParaNomeArquivo(string linha
     return nomeArquivo;
 }
 
-void Comandos::remove(string caminhoComando, string nomeArquivo) {
-    ifstream arqConfig(caminhoComando + "/" + configFileName);
-
-    if (nomeArquivo.empty()) {
-        cout << "Deve-se informar o nome do arquivo";
-        return;
-    }
-
+string Comandos::remove(string caminhoComando, string nomeArquivo) {
     if (mymfsEstaConfigurado(caminhoComando)) {
-//        string linhaConfig = verificarArquivoExisteEmConfig(caminhoComando, nomeArquivo);
-        string linhaConfig;
-        string linhaConfigNovo = "";
-        string configNovo = "";
-        LinhaConfig nomeArquivoEncontrado;
+        vector<string> unidades = obterUnidades(caminhoComando);
 
-        if (!linhaConfig.empty()) {
-            do {
-                getline(arqConfig, linhaConfigNovo);
-                if (linhaConfigNovo.length() > 0) {
-                    nomeArquivoEncontrado = converterLinhaConfigParaNomeArquivo(linhaConfigNovo);
-                    if (nomeArquivoEncontrado.arquivo != nomeArquivo) {
-                        configNovo += (linhaConfigNovo + "\n");
-                    }
-                }
-            } while (!arqConfig.eof());
+        ifstream arquivoConfig;
 
-            arqConfig.close();
-
-            ofstream arquivoConfig(caminhoComando + "/" + configFileName, std::ofstream::out | std::ofstream::trunc);
-            arquivoConfig << configNovo;
-            arquivoConfig.close();
-
-            string diretorioArquivoRemover = linhaConfig.substr(0, linhaConfig.find(" "));
-            fsys::remove_all(caminhoComando + "/files/" + diretorioArquivoRemover);
-
-            cout << "O arquivo <" + nomeArquivo + "> foi removido com sucesso." << endl;
-        } else {
-            arqConfig.close();
-            cout << "Operacao nao realizada! O arquivo <" << nomeArquivo << "> nao existe no Mymfs" << endl;
+        for (auto unidade : unidades) {
+            if (fsys::exists(unidade + configFileName)) {
+                arquivoConfig = ifstream(unidade + configFileName);
+                break;
+            }
         }
+
+        LinhaConfig arquivoExtensao = separarNomeExtensao(nomeArquivo);
+        bool existe = false;
+        string line;
+        LinhaConfig comparacao;
+        string configNovo = "";
+        while (getline(arquivoConfig, line)) {
+            comparacao = converterLinhaConfigParaNomeArquivo(line);
+            if (comparacao.arquivo == arquivoExtensao.arquivo && comparacao.extensao == arquivoExtensao.extensao)
+                existe = true;
+            else
+                configNovo += line + "\n";
+        }
+        if (!existe) {
+            arquivoConfig.close();
+            return "O arquivo nao existe no MyMFS.";
+        }
+        arquivoConfig.close();
+
+        for (auto unidade : unidades) {
+            if (fsys::exists(unidade + "files/" + arquivoExtensao.extensao + "-" + arquivoExtensao.arquivo));
+            fsys::remove_all(unidade + "files/" + arquivoExtensao.extensao + "-" + arquivoExtensao.arquivo);
+            ofstream arquivoConfigNovo(unidade + configFileName, ifstream::out | ifstream::trunc);
+            arquivoConfigNovo << configNovo;
+            arquivoConfigNovo.close();
+        }
+
+        return "O arquivo <" + nomeArquivo + "> foi removido com sucesso.";
     } else {
-        arqConfig.close();
         cout << "O Mymfs nao esta configurado na unidade informada." << endl;
     }
 }
@@ -428,7 +434,7 @@ string Comandos::removeAll(string caminhoComando) {
     if (mymfsEstaConfigurado(caminhoComando)) {
         vector<string> unidades = obterUnidades(caminhoComando);
 
-        for (auto unidade : unidades){
+        for (auto unidade : unidades) {
             if (fsys::exists(unidade + "files"))
                 fsys::remove_all(unidade + "files");
             if (fsys::exists(unidade + configFileName))

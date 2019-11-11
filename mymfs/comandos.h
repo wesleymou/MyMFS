@@ -40,7 +40,7 @@ class Comandos {
 
   vector<string> obterUnidades(string path);
 
-  LinhaConfig nomeExtensao(string path);
+  LinhaConfig separarNomeExtensao(string path);
 
   int verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo);
 
@@ -64,7 +64,7 @@ class Comandos {
 
   string listAll(string caminhoComando);
 
-  void remove(string caminhoComando, string nomeArquivo);
+  string remove(string caminhoComando, string nomeArquivo);
 
   string removeAll(string caminhoComando);
 
