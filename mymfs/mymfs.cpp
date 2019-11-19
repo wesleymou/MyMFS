@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
                 string palavra = argv[3];    //Palavra que será procurado no arquivo
                 string caminhoArquivoToRead = argv[4];  //Caminho do arquivo que será pesquisado
 
-                comandos.procuraPalavra(caminhoComando, palavra, caminhoArquivoToRead);
+                cout << comandos.procuraPalavra(caminhoComando, palavra, caminhoArquivoToRead) << endl;
             } else
                 cout << "Comando grep incorreto." << endl;
         } else if (comando == "head100") {

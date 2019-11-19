@@ -42,17 +42,21 @@ class Comandos {
 
   LinhaConfig separarNomeExtensao(string path);
 
-  int verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo);
+  bool arquivoExiste(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo);
 
   void escritaParalela(vector<Diretrizes> *d, string filePath, int i, int th);
 
   void leituraParalela(vector<Diretrizes> *d, string filePath, int i, int th);
 
+  void alimentarBufferParalelo(vector<Diretrizes> *d, stringstream *buffer_out, int i, int th);
+
+  LinhaConfig converterLinhaConfigParaNomeArquivo(string linhaConfig);
+
   vector<unsigned char> compress_string(vector<unsigned char> str, int compressionlevel = 9);
 
   vector<unsigned char> decompress_string(vector<unsigned char> str);
 
-  LinhaConfig converterLinhaConfigParaNomeArquivo(string linhaConfig);
+  string toUpperCase(string text);
 
  public:
 
@@ -68,7 +72,7 @@ class Comandos {
 
   string removeAll(string caminhoComando);
 
-  void procuraPalavra(string caminhoComando, string palavra, string caminhoArquivoToRead);
+  string procuraPalavra(string caminhoComando, string palavra, string arquivoAlvo);
 
   void primeiras100Linhas(string caminhoComando, string caminhoArquivoToRead);
 

@@ -58,7 +58,7 @@ Comandos::LinhaConfig Comandos::separarNomeExtensao(string path) {
     return nome_arquivo;
 }
 
-int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo) {
+bool Comandos::arquivoExiste(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo) {
     ifstream arqConfig;
     vector<string> unidades = this->obterUnidades(caminhoComando);
     if (fsys::exists(unidades[0] + "/" + configFileName)) {
@@ -66,7 +66,7 @@ int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string ca
     } else if (fsys::exists(unidades[1] + "/" + configFileName)) {
         arqConfig = ifstream(unidades[1] + "/" + configFileName);
     } else {
-        return 1;
+        return false;
     }
 
     LinhaConfig nomeExtensao = this->separarNomeExtensao(nomeArquivo);
@@ -85,10 +85,10 @@ int Comandos::verificarArquivoExisteEmConfig(LinhaConfig *linhaConfig, string ca
             linhaConfig->extensao = linha.substr(0, x);
             linhaConfig->arquivo = linha.substr(x + 1, y - x - 1);
             linhaConfig->quantidade = stoi(linha.substr(y + 1, string::npos));
-            return 0;
+            return true;
         }
     }
-    return 1;
+    return false;
 }
 
 void Comandos::escritaParalela(vector<Diretrizes> *d, string filePath, int i, int th) {
@@ -156,11 +156,40 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
 
             infile.close();
         } else {
-            cout << "arquivo corrompido" << endl;
+            cout << "Arquivo corrompido" << endl;
             return;
+//            throw (runtime_error("Arquivo corrompido"));
         }
     }
     outfile.close();
+}
+
+void Comandos::alimentarBufferParalelo(vector<Diretrizes> *d, stringstream *buffer_out, int i, int th) {
+    vector<Diretrizes> diretrizes = *d;
+    for (i; i < diretrizes.size(); i += th) {
+        ifstream infile;
+        if (fsys::exists(diretrizes[i].path)) {
+            infile = ifstream(diretrizes[i].path, ios_base::in | ios_base::binary | ios_base::ate);
+            int size = infile.tellg();
+
+            vector<unsigned char> buffer(size);
+            infile.seekg(0, ios::beg);
+            infile.read(reinterpret_cast<char *>(&buffer[0]), size);
+
+            buffer_out->seekp(diretrizes[i].inicio);
+            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);
+            buffer_out->flush();
+
+            infile.close();
+
+        } else if (fsys::exists(diretrizes[i].compress)) {
+            infile = ifstream(diretrizes[i].compress, ios_base::in | ios_base::binary);
+        } else {
+            cout << "Arquivo corrompido" << endl;
+            return;
+//            throw (runtime_error("Arquivo corrompido"));
+        }
+    }
 }
 
 string Comandos::config(string caminhoComando, int length, char **unidades) {
@@ -228,9 +257,9 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
         //Obtem o nome do diretório a ser criado para o arquivo atraves do seu nome
         LinhaConfig nomeArquivo = separarNomeExtensao(caminhoArquivoImport);
         LinhaConfig null;
-        if (this->verificarArquivoExisteEmConfig(&null,
-                                                 caminhoComando,
-                                                 nomeArquivo.arquivo + "." + nomeArquivo.extensao) == 1) {
+        if (!this->arquivoExiste(&null,
+                                 caminhoComando,
+                                 nomeArquivo.arquivo + "." + nomeArquivo.extensao)) {
             string nomeDiretorio = nomeArquivo.extensao + "-" + nomeArquivo.arquivo;
 
             ifstream infile(caminhoArquivoImport, ifstream::binary | ios_base::ate);
@@ -294,9 +323,9 @@ string Comandos::exportarArquivo(string caminhoComando, string nomeArquivoExport
     //Verifica se o arquivo de configuração e se o arquivo a ser exportado existem
     if (mymfsEstaConfigurado(caminhoComando)) {
         LinhaConfig linhaConfig;
-        if (verificarArquivoExisteEmConfig(&linhaConfig,
-                                           caminhoComando,
-                                           nomeArquivoExport) == 0) {//Verifica se encontrou o diretorio do arquivo a ser exportado
+        if (arquivoExiste(&linhaConfig,
+                          caminhoComando,
+                          nomeArquivoExport)) {//Verifica se encontrou o diretorio do arquivo a ser exportado
             if (!fsys::exists(caminhoDiretorioExport + "/" + nomeArquivoExport)) { //Verifica se o arquivo a ser exportado existe no destino
                 //Caso não exista, cria um arquivo no diretorio informado concatenando todos os arquivos de 500KB
                 vector<string> unidades = obterUnidades(caminhoComando);
@@ -417,8 +446,8 @@ string Comandos::remove(string caminhoComando, string nomeArquivo) {
         arquivoConfig.close();
 
         for (auto unidade : unidades) {
-            if (fsys::exists(unidade + "files/" + arquivoExtensao.extensao + "-" + arquivoExtensao.arquivo));
-            fsys::remove_all(unidade + "files/" + arquivoExtensao.extensao + "-" + arquivoExtensao.arquivo);
+            if (fsys::exists(unidade + "files/" + arquivoExtensao.extensao + "-" + arquivoExtensao.arquivo))
+                fsys::remove_all(unidade + "files/" + arquivoExtensao.extensao + "-" + arquivoExtensao.arquivo);
             ofstream arquivoConfigNovo(unidade + configFileName, ifstream::out | ifstream::trunc);
             arquivoConfigNovo << configNovo;
             arquivoConfigNovo.close();
@@ -447,82 +476,67 @@ string Comandos::removeAll(string caminhoComando) {
     }
 }
 
-void Comandos::procuraPalavra(string caminhoComando, string palavra, string caminhoArquivoToRead) {
-    ifstream arqConfigExiste(caminhoComando + "/" + configFileName);
+string Comandos::procuraPalavra(string caminhoComando, string palavra, string arquivoAlvo) {
 
     //Verifica se o arquivo de configuração e se o arquivo a ser exportado existem
-    if (!caminhoArquivoToRead.empty() && mymfsEstaConfigurado(caminhoComando)) {
-        string nomeDiretorioEncontrado;
-        string qtdArquivosEncontrado;
-
-        //Percorre o arquivoConfig para obter a linha de configuração do arquivo a ser exportado
-//        string linhaConfig = verificarArquivoExisteEmConfig(caminhoComando, caminhoArquivoToRead);
-        string linhaConfig;
+    if (mymfsEstaConfigurado(caminhoComando)) {
+        LinhaConfig linhaConfig;
 
         //Verifica se encontrou o diretorio do arquivo a ser exportado
-        if (!linhaConfig.empty()) {
+        if (arquivoExiste(&linhaConfig, caminhoComando, arquivoAlvo)) {
 
-            nomeDiretorioEncontrado = linhaConfig.substr(0, linhaConfig.find(" "));
-            qtdArquivosEncontrado = linhaConfig.substr(linhaConfig.find(" ") + 1,
-                                                       (linhaConfig.size() - linhaConfig.find(" ")));
+            vector<string> unidades = obterUnidades(caminhoComando);
 
-            if (!nomeDiretorioEncontrado.empty() && !qtdArquivosEncontrado.empty()) {
-
-                int numArquivos = stoi(qtdArquivosEncontrado);
-                int contaLinha = 0;
-                string linha = "";
-                string ultimaLinha = "";
-                int i;
-                for (i = 0; i < numArquivos; i++) {
-                    auto s = to_string(i);
-                    s = s + ".txt";
-                    ifstream arqPesquisa(caminhoComando + "/files/" + nomeDiretorioEncontrado + "/" + s);
-                    if (arqPesquisa) {
-                        getline(arqPesquisa, linha);
-                        do {
-                            contaLinha++;
-                            if (ultimaLinha.length() > 0) {
-                                linha = ultimaLinha + linha;
-                                ultimaLinha = "";
-                            }
-                            if (linha.find(palavra) != -1) {
-                                cout << "Encontrado " << contaLinha << '\n' << endl;
-                                i = numArquivos + 1;
-                                return;
-                            }
-                            getline(arqPesquisa, linha);
-                        } while (!arqPesquisa.eof());
-                        if (arqPesquisa.eof()) {
-                            if (linha.length() > 0) {
-                                if (i == numArquivos - 1) {
-                                    if (linha.find(palavra) != -1) {
-                                        contaLinha++;
-                                        cout << "Encontrado " << contaLinha << '\n' << endl;
-                                        i = numArquivos + 1;
-                                        return;
-                                    }
-                                } else
-                                    ultimaLinha = linha;
-                            }
-                        }
-                    } else {
-                        cerr << "Ocorreu um erro. O arquivo nao pode ser aberto " << s << '\n';
-                    }
-                    arqPesquisa.close();
-                }
-                if (i == numArquivos) {
-                    cout << "Nao Encontrado" << endl;
-                }
-            } else {
-                cout
-                    << "Operacao nao realizada! Erro ao ler diretório ou numero de arquivos do retorno do mymsf.config"
-                    << endl;
+            vector<Diretrizes> diretrizes;
+            for (int i = 0; i < linhaConfig.quantidade; ++i) {
+                Diretrizes d;
+                d.inicio = i * this->sizeFileMax;
+                d.length = this->sizeFileMax;
+                d.path = unidades[i % unidades.size()] + "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(
+                    i);
+                d.compress = unidades[(i + 1) % unidades.size()] + "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(
+                    i) + ".compress";
+                diretrizes.push_back(d);
             }
+            diretrizes[diretrizes.size() - 1].length = linhaConfig.tamanho - ((linhaConfig.quantidade - 1) * this->sizeFileMax);
+
+            string line;
+            std::stringstream buffer;
+            string oldLine = "";
+            int numLine = 1;
+palavra = toUpperCase(palavra);
+            vector<std::thread> threads;
+            for (int i = 0; i < linhaConfig.quantidade; i += numThreads * 3) {
+                for (int j = 0; j < this->numThreads; ++j) {
+                    threads.push_back(std::thread(&Comandos::alimentarBufferParalelo,
+                                                  this,
+                                                  &diretrizes,
+                                                  &buffer,
+                                                  i,
+                                                  numThreads));
+                }
+
+                for (std::thread &thread :threads) {
+                    if (thread.joinable())
+                        thread.join();
+                }
+
+                while (getline(buffer, line)) {
+                    if (toUpperCase(line).find(palavra) != string::npos) {
+                        return "Encontrado na linha " + to_string(numLine) + ": " + line;
+                    }
+                    numLine++;
+                }
+                if (line[line.length() - 1] != '\n') {
+                    oldLine = line;
+                }
+            }
+            return "Nao encontrado";
         } else {
-            cout << "Operacao nao realizada! O arquivo <" << caminhoArquivoToRead << "> nao existe no Mymfs" << endl;
+            return "Operacao nao realizada! O arquivo <" + arquivoAlvo + "> nao existe no Mymfs";
         }
     } else
-        cout << "O Mymfs nao esta configurado na unidade informada." << endl;
+        return "O Mymfs nao esta configurado na unidade informada.";
 }
 
 void Comandos::primeiras100Linhas(string caminhoComando, string caminhoArquivoToRead) {
@@ -535,7 +549,7 @@ void Comandos::primeiras100Linhas(string caminhoComando, string caminhoArquivoTo
         string qtdArquivosEncontrado;
 
         //Percorre o arquivoConfig para obter a linha de configuração do arquivo a ser exportado
-//        string linhaConfig = verificarArquivoExisteEmConfig(caminhoComando, caminhoArquivoToRead);
+//        string linhaConfig = arquivoExiste(caminhoComando, caminhoArquivoToRead);
         string linhaConfig;
 
         //Verifica se encontrou o diretorio do arquivo a ser exportado
@@ -608,7 +622,7 @@ void Comandos::ultimas100Linhas(string caminhoComando, string caminhoArquivoToRe
         string qtdArquivosEncontrado;
 
         //Percorre o arquivoConfig para obter a linha de configuração do arquivo
-//        string linhaConfig = verificarArquivoExisteEmConfig(caminhoComando, caminhoArquivoToRead);
+//        string linhaConfig = arquivoExiste(caminhoComando, caminhoArquivoToRead);
         string linhaConfig;
 
         //Verifica se encontrou o diretorio do arquivo
@@ -821,4 +835,11 @@ vector<unsigned char> Comandos::decompress_string(vector<unsigned char> str) {
     }
 
     return outstring;
+}
+
+string Comandos::toUpperCase(string text){
+    for (int i = 0; i < text.size(); ++i) {
+        text[i] = toupper(text[i]);
+    }
+    return text;
 }
