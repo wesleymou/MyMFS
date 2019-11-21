@@ -17,7 +17,7 @@ class Comandos {
 
   const int sizeFileMax = 512000;          //Define o tamanho maximo dos arquivos como 500KB
   const int sizeFileConfig = 51200;
-  const int numThreads = 1;
+  const int numThreads = 4;
   const string configFileName = "mymfs.config";
 
   std::mutex monitor_thread;
@@ -50,6 +50,10 @@ class Comandos {
 
   void alimentarBufferParalelo(vector<Diretrizes> *d, stringstream *buffer_out, int i, int th);
 
+  void primeirasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, int quant);
+
+  void ultimasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, int quant);
+
   LinhaConfig converterLinhaConfigParaNomeArquivo(string linhaConfig);
 
   vector<unsigned char> compress_string(vector<unsigned char> str, int compressionlevel = 9);
@@ -74,7 +78,7 @@ class Comandos {
 
   string procuraPalavra(string caminhoComando, string palavra, string arquivoAlvo);
 
-  void primeiras100Linhas(string caminhoComando, string caminhoArquivoToRead);
+  string primeiras100Linhas(string caminhoComando, string caminhoArquivoToRead);
 
-  void ultimas100Linhas(string caminhoComando, string caminhoArquivoToRead);
+  string ultimas100Linhas(string caminhoComando, string caminhoArquivoToRead);
 };

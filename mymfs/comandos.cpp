@@ -125,6 +125,7 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
 
     for (i; i < diretrizes.size(); i += th) {   //Cria os arquivos de 500KB ou menos
         if (fsys::exists(diretrizes[i].path)) {
+            std::unique_lock<std::mutex> lck(monitor_thread, std::defer_lock);
             ifstream infile(diretrizes[i].path, ios::in | ios::binary | ios::ate);
             int size = infile.tellg();
 
@@ -132,9 +133,11 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
             infile.seekg(0, ios::beg);
             infile.read(reinterpret_cast<char *>(&buffer[0]), size);
 
+            lck.lock();
             outfile.seekp(diretrizes[i].inicio);
             outfile.write(reinterpret_cast<const char *>(buffer.data()), size);
-            outfile.flush();
+//            outfile.flush();
+            lck.unlock();
 
             infile.close();
         } else if (fsys::exists(diretrizes[i].compress)) {
@@ -151,7 +154,7 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
             lck.lock();
             outfile.seekp(diretrizes[i].inicio);
             outfile.write(reinterpret_cast<const char *>(descompress.data()), descompress.size());
-            outfile.flush();
+//            outfile.flush();
             lck.unlock();
 
             infile.close();
@@ -167,6 +170,7 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
 void Comandos::alimentarBufferParalelo(vector<Diretrizes> *d, stringstream *buffer_out, int i, int th) {
     vector<Diretrizes> diretrizes = *d;
     for (i; i < diretrizes.size(); i += th) {
+        std::unique_lock<std::mutex> lck(monitor_thread, std::defer_lock);
         ifstream infile;
         if (fsys::exists(diretrizes[i].path)) {
             infile = ifstream(diretrizes[i].path, ios_base::in | ios_base::binary | ios_base::ate);
@@ -176,14 +180,110 @@ void Comandos::alimentarBufferParalelo(vector<Diretrizes> *d, stringstream *buff
             infile.seekg(0, ios::beg);
             infile.read(reinterpret_cast<char *>(&buffer[0]), size);
 
+            lck.lock();
             buffer_out->seekp(diretrizes[i].inicio);
             buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);
             buffer_out->flush();
+            lck.unlock();
 
             infile.close();
 
         } else if (fsys::exists(diretrizes[i].compress)) {
-            infile = ifstream(diretrizes[i].compress, ios_base::in | ios_base::binary);
+            infile = ifstream(diretrizes[i].compress, ios_base::in | ios_base::binary | ios_base::ate);
+            int size = infile.tellg();
+
+            vector<unsigned char> bufferCompress(size);
+            infile.seekg(0, ios::beg);
+            infile.read(reinterpret_cast<char *>(&bufferCompress[0]), size);
+
+            vector<unsigned char> bufferUncompress = decompress_string(bufferCompress);
+
+            lck.lock();
+            buffer_out->seekp(diretrizes[i].inicio);
+            buffer_out->write(reinterpret_cast<const char *>(bufferUncompress.data()), size);
+            buffer_out->flush();
+            lck.unlock();
+
+            infile.close();
+
+        } else {
+            cout << "Arquivo corrompido" << endl;
+            return;
+//            throw (runtime_error("Arquivo corrompido"));
+        }
+    }
+}
+
+void Comandos::primeirasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, int quant) {
+    vector<Diretrizes> diretrizes = *d;
+    for (int i = 0; i < quant; i++) {
+        if (fsys::exists(diretrizes[i].path)) {
+            ifstream infile(diretrizes[i].path,
+                            ios_base::in | ios_base::binary | ios_base::ate);
+            int size = infile.tellg();
+
+            vector<unsigned char> buffer(size);
+            infile.seekg(0, ios::beg);
+            infile.read(reinterpret_cast<char *>(&buffer[0]), size);
+
+            buffer_out->seekp(diretrizes[i].inicio);
+            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);;
+
+            infile.close();
+
+        } else if (fsys::exists(diretrizes[i].compress)) {
+            ifstream infile(diretrizes[i].compress,
+                            ios_base::in | ios_base::binary | ios_base::ate);
+            int size = infile.tellg();
+
+            vector<unsigned char> buffer(size);
+            infile.seekg(0, ios::beg);
+            infile.read(reinterpret_cast<char *>(&buffer[0]), size);
+
+            buffer_out->seekp(diretrizes[i].inicio);
+            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);;
+
+            infile.close();
+
+        } else {
+            cout << "Arquivo corrompido" << endl;
+            return;
+//            throw (runtime_error("Arquivo corrompido"));
+        }
+    }
+}
+
+void Comandos::ultimasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, int quant) {
+    vector<Diretrizes> diretrizes = *d;
+    for (int i = 0; i < quant; i++) {
+        if (fsys::exists(diretrizes[(diretrizes.size() - quant) + i].path)) {
+            ifstream infile(diretrizes[(diretrizes.size() - quant) + i].path,
+                            ios_base::in | ios_base::binary | ios_base::ate);
+            int size = infile.tellg();
+
+            vector<unsigned char> buffer(size);
+            infile.seekg(0, ios::beg);
+            infile.read(reinterpret_cast<char *>(&buffer[0]), size);
+
+            buffer_out->seekp(diretrizes[i].inicio);
+            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);;
+
+            infile.close();
+
+        } else if (fsys::exists(diretrizes[(diretrizes.size() - quant) + i].compress)) {
+            ifstream infile(diretrizes[(diretrizes.size() - quant) + i].compress,
+                            ios_base::in | ios_base::binary | ios_base::ate);
+            int size = infile.tellg();
+
+            vector<unsigned char> buffer(size);
+            infile.seekg(0, ios::beg);
+            infile.read(reinterpret_cast<char *>(&buffer[0]), size);
+
+            buffer_out->seekp(diretrizes[i].inicio);
+            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);;
+
+            infile.close();
+
         } else {
             cout << "Arquivo corrompido" << endl;
             return;
@@ -504,15 +604,16 @@ string Comandos::procuraPalavra(string caminhoComando, string palavra, string ar
             std::stringstream buffer;
             string oldLine = "";
             int numLine = 1;
-palavra = toUpperCase(palavra);
+            palavra = toUpperCase(palavra);
             vector<std::thread> threads;
+            int numThreads = 1;
             for (int i = 0; i < linhaConfig.quantidade; i += numThreads * 3) {
-                for (int j = 0; j < this->numThreads; ++j) {
+                for (int j = 0; j < numThreads; j++) {
                     threads.push_back(std::thread(&Comandos::alimentarBufferParalelo,
                                                   this,
                                                   &diretrizes,
                                                   &buffer,
-                                                  i,
+                                                  j,
                                                   numThreads));
                 }
 
@@ -539,220 +640,135 @@ palavra = toUpperCase(palavra);
         return "O Mymfs nao esta configurado na unidade informada.";
 }
 
-void Comandos::primeiras100Linhas(string caminhoComando, string caminhoArquivoToRead) {
+string Comandos::primeiras100Linhas(string caminhoComando, string caminhoArquivoToRead) {
+    int quantLines = 100;
 
     ifstream arqConfigExiste(caminhoComando + "/" + configFileName);
 
-    //Verifica se o arquivo de configuração e se o arquivo a ser exportado existem
-    if (!caminhoArquivoToRead.empty() && mymfsEstaConfigurado(caminhoComando)) {
-        string nomeDiretorioEncontrado;
-        string qtdArquivosEncontrado;
-
-        //Percorre o arquivoConfig para obter a linha de configuração do arquivo a ser exportado
-//        string linhaConfig = arquivoExiste(caminhoComando, caminhoArquivoToRead);
-        string linhaConfig;
+    //Verifica se o arquivo de configuração existe
+    if (mymfsEstaConfigurado(caminhoComando)) {
+        LinhaConfig linhaConfig;
 
         //Verifica se encontrou o diretorio do arquivo a ser exportado
-        if (!linhaConfig.empty()) {
+        if (arquivoExiste(&linhaConfig, caminhoComando, caminhoArquivoToRead)) {
 
-            nomeDiretorioEncontrado = linhaConfig.substr(0, linhaConfig.find(" "));
-            qtdArquivosEncontrado = linhaConfig.substr(linhaConfig.find(" ") + 1,
-                                                       (linhaConfig.size() - linhaConfig.find(" ")));
-
-            if (!nomeDiretorioEncontrado.empty() && !qtdArquivosEncontrado.empty()) {
-
-                int numArquivos = stoi(qtdArquivosEncontrado);
-                int contaLinha = 0;
-                string linha = "";
-                string ultimaLinha = "";
-                for (int i = 0; i < numArquivos; i++) {
-                    auto s = to_string(i);
-                    s = s + ".txt";
-                    //Percorre os arquivos de 0 a numArquivos concatenando-os no arquivo exportado
-                    ifstream arqPesquisa(caminhoComando + "/files/" + nomeDiretorioEncontrado + "/" + s);
-                    if (arqPesquisa) {
-                        int loop = 0;
-                        int condicao = 100 - contaLinha;
-                        getline(arqPesquisa, linha);
-                        do {
-                            contaLinha++;
-                            loop++;
-                            if (ultimaLinha.length() > 0) {
-                                linha = ultimaLinha + linha;
-                                ultimaLinha = "";
-                                cout << linha << endl;
-                            } else
-                                cout << linha << endl;
-                            getline(arqPesquisa, linha);
-                        } while (loop < condicao && !arqPesquisa.eof());
-                        if (arqPesquisa.eof()) {
-                            if (i == numArquivos - 1) {
-                                cout << linha << endl;
-                            } else if ((linha.length() > 0 && i < numArquivos - 1)) {
-                                ultimaLinha = linha;
-                            }
-                        }
-                        if (contaLinha == 100)
-                            i = numArquivos;
-                    } else {
-                        cerr << "Ocorreu um erro. O arquivo nao pode ser aberto " << s << '\n';
-                    }
-                    arqPesquisa.close();
-                }
-            } else {
-                cout
-                    << "Operacao nao realizada! Erro ao ler diretório ou número de arquivos do retorno do mymsf.config"
-                    << endl;
+            vector<string> unidades = obterUnidades(caminhoComando);
+            vector<Diretrizes> diretrizes;
+            for (int i = 0; i < linhaConfig.quantidade; ++i) {
+                Diretrizes d;
+                d.inicio = i * this->sizeFileMax;
+                d.length = this->sizeFileMax;
+                d.path = unidades[i % unidades.size()] + "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(
+                    i);
+                d.compress = unidades[(i + 1) % unidades.size()] + "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(
+                    i) + ".compress";
+                diretrizes.push_back(d);
             }
+            diretrizes[diretrizes.size() - 1].length = linhaConfig.tamanho - ((linhaConfig.quantidade - 1) * this->sizeFileMax);
+
+            stringstream buffer;
+            string line;
+            vector<string> linhas;
+            int cont = 0;
+
+            while ((linhas.size() < (quantLines + 1)) && (cont < diretrizes.size())) {
+
+                primeirasLinhas(&diretrizes, &buffer, cont + 1);
+                while (getline(buffer, line)) {
+                    linhas.push_back(line);
+                }
+                if (linhas.size() >= (quantLines + 1)) {
+                    string linhasRetorno = "";
+                    for (int i = 0; i < quantLines; ++i) {
+                        linhasRetorno += linhas[i] + "\n";
+                    }
+                    return linhasRetorno;
+                }
+                cont++;
+                if (cont < diretrizes.size()) {
+                    linhas.clear();
+                    buffer.clear();
+                }
+            }
+
+            string linhasRetorno = "";
+            for (int i = 0; i < linhas.size(); ++i) {
+                linhasRetorno += linhas[i] + "\n";
+            }
+            return linhasRetorno;
+
         } else {
-            cout << "Operacao nao realizada! O arquivo <" << caminhoArquivoToRead << "> nao existe no Mymfs" << endl;
+            return "Operacao nao realizada! O arquivo <" + caminhoArquivoToRead + "> nao existe no Mymfs";
         }
     } else {
-        cout << "O Mymfs nao esta configurado na unidade informada." << endl;
+        return "O Mymfs nao esta configurado na unidade informada.";
     }
-
 }
 
-void Comandos::ultimas100Linhas(string caminhoComando, string caminhoArquivoToRead) {
+string Comandos::ultimas100Linhas(string caminhoComando, string caminhoArquivoToRead) {
+
+    int quantLines = 100;
+
     ifstream arqConfigExiste(caminhoComando + "/" + configFileName);
 
-    //Verifica se o arquivo de configuração e se o arquivo existem
-    if (!caminhoArquivoToRead.empty() && mymfsEstaConfigurado(caminhoComando)) {
-        string nomeDiretorioEncontrado;
-        string qtdArquivosEncontrado;
+    //Verifica se o arquivo de configuração existe
+    if (mymfsEstaConfigurado(caminhoComando)) {
+        LinhaConfig linhaConfig;
 
-        //Percorre o arquivoConfig para obter a linha de configuração do arquivo
-//        string linhaConfig = arquivoExiste(caminhoComando, caminhoArquivoToRead);
-        string linhaConfig;
+        //Verifica se encontrou o diretorio do arquivo a ser exportado
+        if (arquivoExiste(&linhaConfig, caminhoComando, caminhoArquivoToRead)) {
 
-        //Verifica se encontrou o diretorio do arquivo
-        if (!linhaConfig.empty()) {
+            vector<string> unidades = obterUnidades(caminhoComando);
+            vector<Diretrizes> diretrizes;
+            for (int i = 0; i < linhaConfig.quantidade; ++i) {
+                Diretrizes d;
+                d.inicio = i * this->sizeFileMax;
+                d.length = this->sizeFileMax;
+                d.path = unidades[i % unidades.size()] + "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(
+                    i);
+                d.compress = unidades[(i + 1) % unidades.size()] + "files/" + linhaConfig.extensao + "-" + linhaConfig.arquivo + "/" + to_string(
+                    i) + ".compress";
+                diretrizes.push_back(d);
+            }
+            diretrizes[diretrizes.size() - 1].length = linhaConfig.tamanho - ((linhaConfig.quantidade - 1) * this->sizeFileMax);
 
-            nomeDiretorioEncontrado = linhaConfig.substr(0, linhaConfig.find(" "));
-            qtdArquivosEncontrado = linhaConfig.substr(linhaConfig.find(" ") + 1,
-                                                       (linhaConfig.size() - linhaConfig.find(" ")));
+            stringstream buffer;
+            string line;
+            vector<string> linhas;
+            int cont = 0;
 
-            if (!nomeDiretorioEncontrado.empty() && !qtdArquivosEncontrado.empty()) {
+            while ((linhas.size() < (quantLines + 1)) && (cont < diretrizes.size())) {
 
-                int numArquivos = stoi(qtdArquivosEncontrado);
-                int contaLinha = 0;
-                int linhasUltimoArquivo = 0;
-                string linha = "";
-                string ultimaLinha = "";
-                for (int i = numArquivos - 1; i >= 0; i--) {
-                    linhasUltimoArquivo = 0;
-                    auto s = to_string(i);
-                    s = s + ".txt";
-                    ifstream arqPesquisa(caminhoComando + "/files/" + nomeDiretorioEncontrado + "/" + s);
-                    if (arqPesquisa) {
-                        getline(arqPesquisa, linha);
-                        do {
-                            linhasUltimoArquivo++;
-                            getline(arqPesquisa, linha);
-                        } while (!arqPesquisa.eof());
-                        if (i == numArquivos - 1) {
-                            if (linha.length() > 0) {
-                                linhasUltimoArquivo++;
-                            }
-                        }
-                    }
-                    arqPesquisa.close();
-                    if (linhasUltimoArquivo >= 100 && contaLinha == 0) {
-                        int comecaLeitura = linhasUltimoArquivo - 100;
-                        ifstream arqPesquisa(caminhoComando + "/files/" + nomeDiretorioEncontrado + "/" + s);
-                        if (arqPesquisa) {
-                            while (!arqPesquisa.eof()) {
-                                getline(arqPesquisa, linha);
-                                if (comecaLeitura == 0)
-                                    cout << linha << endl;
-                                else
-                                    comecaLeitura--;
-                            }
-                            i = -2;
-                        }
-                        arqPesquisa.close();
-                    } else if ((linhasUltimoArquivo + contaLinha) >= 100) {
-                        int faltaCompletarContaLinha = 100 - contaLinha;
-                        int comecaLeitura = linhasUltimoArquivo - faltaCompletarContaLinha;
-                        for (int j = i; j < numArquivos; j++) {
-                            auto k = to_string(j);
-                            k = k + ".txt";
-                            ifstream arqPesquisa(caminhoComando + "/files/" + nomeDiretorioEncontrado + "/" + k);
-                            if (arqPesquisa) {
-                                getline(arqPesquisa, linha);
-                                do {
-                                    if (comecaLeitura == 0) {
-                                        if (ultimaLinha.length() > 0) {
-                                            linha = ultimaLinha + linha;
-                                            ultimaLinha = "";
-                                            cout << linha << endl;
-                                        } else
-                                            cout << linha << endl;
-                                    } else
-                                        comecaLeitura--;
-                                    getline(arqPesquisa, linha);
-                                } while (!arqPesquisa.eof());
-                                if (arqPesquisa.eof()) {
-                                    if (linha.length() > 0 && j < numArquivos - 1) {
-                                        ultimaLinha = linha;
-                                    }
-                                    if (j == numArquivos - 1) {
-                                        if (linha.length() > 0) {
-                                            cout << linha << endl;
-                                        }
-                                    }
-                                }
-                            }
-                            arqPesquisa.close();
-                        }
-                        i = -2;
-                    } else if ((linhasUltimoArquivo + contaLinha) < 100 && i == 0) {
-                        for (int j = i; j < numArquivos; j++) {
-                            auto k = to_string(j);
-                            k = k + ".txt";
-                            ifstream arqPesquisa(caminhoComando + "/files/" + nomeDiretorioEncontrado + "/" + k);
-                            if (arqPesquisa) {
-                                getline(arqPesquisa, linha);
-                                do {
-                                    if (ultimaLinha.length() > 0) {
-                                        linha = ultimaLinha + linha;
-                                        ultimaLinha = "";
-                                        cout << linha << endl;
-                                    } else
-                                        cout << linha << endl;
-                                    getline(arqPesquisa, linha);
-                                } while (!arqPesquisa.eof());
-                                if (arqPesquisa.eof()) {
-                                    if (linha.length() > 0 && j < numArquivos - 1) {
-                                        ultimaLinha = linha;
-                                    }
-                                    if (j == numArquivos - 1) {
-                                        if (linha.length() > 0) {
-                                            cout << linha << endl;
-                                        }
-                                    }
-                                }
-                            }
-                            arqPesquisa.close();
-                        }
-                        i = -2;
-                    } else if ((linhasUltimoArquivo + contaLinha) < 100) {
-                        contaLinha += linhasUltimoArquivo;
-                    }
+                ultimasLinhas(&diretrizes, &buffer, cont + 1);
+                while (getline(buffer, line)) {
+                    linhas.push_back(line);
                 }
-            } else {
-                cout
-                    << "Operacao nao realizada! Erro ao ler diretório ou número de arquivos do retorno do mymsf.config"
-                    << endl;
+                if (linhas.size() >= (quantLines + 1)) {
+                    string linhasRetorno = "";
+                    for (int i = 0; i < quantLines; ++i) {
+                        linhasRetorno += linhas[(linhas.size() - quantLines) + i] + "\n";
+                    }
+                    return linhasRetorno;
+                }
+                cont++;
+                if (cont < diretrizes.size()) {
+                    linhas.clear();
+                    buffer.clear();
+                }
             }
 
+            string linhasRetorno = "";
+            for (int i = 0; i < linhas.size(); ++i) {
+                linhasRetorno += linhas[i] + "\n";
+            }
+            return linhasRetorno;
+
         } else {
-            cout << "Operacao nao realizada! O arquivo <" << caminhoArquivoToRead << "> nao existe no Mymfs" << endl;
+            return "Operacao nao realizada! O arquivo <" + caminhoArquivoToRead + "> nao existe no Mymfs";
         }
     } else {
-        cout << "O Mymfs nao esta configurado na unidade informada." << endl;
+        return "O Mymfs nao esta configurado na unidade informada.";
     }
-
 }
 
 vector<unsigned char> Comandos::compress_string(vector<unsigned char> str, int compressionlevel) {
@@ -837,7 +853,7 @@ vector<unsigned char> Comandos::decompress_string(vector<unsigned char> str) {
     return outstring;
 }
 
-string Comandos::toUpperCase(string text){
+string Comandos::toUpperCase(string text) {
     for (int i = 0; i < text.size(); ++i) {
         text[i] = toupper(text[i]);
     }

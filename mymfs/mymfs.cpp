@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
 
     //Deve possuir no minimo 3 argumentos (nome do programa - passado automaticamente,
     //caminho da unidade X, comando a ser executado)
-    if ((argc >= 3) || (argv[2] == "help")) {
+    if (argc >= 3) {
         string caminhoComando = argv[1]; //Caminho de onde o Mymfs deve ser executado
         string comando = argv[2];        //Comando do Mymfs que deve ser executado
 
@@ -55,23 +55,23 @@ int main(int argc, char **argv) {
 
                 cout << comandos.procuraPalavra(caminhoComando, palavra, caminhoArquivoToRead) << endl;
             } else
-                cout << "Comando grep incorreto." << endl;
+                cout << help << endl;
         } else if (comando == "head100") {
             if (argc == 4) {
                 string caminhoArquivoToRead = argv[3];  //Caminho do arquivo que será lido
 
-                comandos.primeiras100Linhas(caminhoComando, caminhoArquivoToRead);
+                cout << comandos.primeiras100Linhas(caminhoComando, caminhoArquivoToRead) << endl;
             } else
-                cout << "Comando head100 incorreto." << endl;
+                cout << help << endl;
         } else if (comando == "tail100") {
             if (argc == 4) {
                 string caminhoArquivoToRead = argv[3];  //Caminho do arquivo que será lido
 
-                comandos.ultimas100Linhas(caminhoComando, caminhoArquivoToRead);
+                cout << comandos.ultimas100Linhas(caminhoComando, caminhoArquivoToRead) << endl;
             } else
-                cout << "Comando tail100 incorreto." << endl;
+                cout << help << endl;
         } else
-            cout << "Comando invalido." << endl;
+            cout << help << endl;
     } else {
         cout << help << endl;
     }
