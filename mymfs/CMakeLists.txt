@@ -2,12 +2,14 @@
     project(mymfs)
 
     set(CMAKE_CXX_STANDARD 17)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+#    set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-    set(SOURCE_FILES mymfs.cpp comandos.cpp comandos.h)
+    file(GLOB MAIN_FILE "*.cpp")
 
-    add_executable(mymfs ${SOURCE_FILES})
+    include_directories(lib)
+    add_subdirectory(lib)
+    add_subdirectory(Google_tests)
 
-    target_link_libraries(mymfs stdc++fs)
-    target_link_libraries(mymfs -lz)
-    target_link_libraries(mymfs -pthread)
+    add_executable(mymfs ${MAIN_FILE})
+
+    target_link_libraries(mymfs Mymfs_lib)
