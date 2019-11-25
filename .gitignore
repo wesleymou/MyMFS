@@ -1,6 +1,7 @@
 directory
 .idea/
 cmake-build-debug/
+cmake-build-debug-mingw/
 cmake-build-release/
 UOEncryption/
 
@@ -23,7 +24,7 @@ files
 # Compiled Dynamic libraries
 *.so
 *.dylib
-*.dll
+#*.dll
 
 # Fortran module files
 *.mod

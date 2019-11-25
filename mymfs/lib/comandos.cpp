@@ -4,7 +4,7 @@
 #include <thread>
 #include <iostream>
 #include <fstream>
-#include <math.h>
+#include <cmath>
 #include <string>
 #include <experimental/filesystem>
 #include <cstring>
@@ -555,7 +555,7 @@ string Comandos::remove(string caminhoComando, string nomeArquivo) {
 
         return "O arquivo <" + nomeArquivo + "> foi removido com sucesso.";
     } else {
-        cout << "O Mymfs nao esta configurado na unidade informada." << endl;
+        return "O Mymfs nao esta configurado na unidade informada.";
     }
 }
 
