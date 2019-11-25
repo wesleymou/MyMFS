@@ -13,78 +13,78 @@
 namespace fsys = std::experimental::filesystem;
 using namespace std;
 
-bool Comandos::mymfsEstaConfigurado(string caminhoComando) {
-    if (!fsys::exists(caminhoComando))
+/**/
+bool Comandos::mymfsEstaConfigurado(const string& caminhoComando) {
+    if (!fsys::exists(caminhoComando))	//verifica se existe o arquivo correspondente as unidades do RAID5 do MyMFS
         return false;
-    ifstream arquivoConfig(caminhoComando, ios_base::in);
-    string line;
-    while (getline(arquivoConfig, line)) {
-        if (fsys::exists(line + configFileName)) {
-            return true;
+    vector<string> unidades = obterUnidades(caminhoComando);
+    for(auto unidade : unidades) {							//Le todas as linhas do arquivo que contem as unidades do MyMFS
+        if (fsys::exists(unidade + configFileName)) {	//e retorna true ao encontrar ao menos um aquivo de configuracao
+            return true;									//do MyMFS
         }
     }
     return false;
 }
 
-vector<string> Comandos::obterUnidades(string path) {
-
+/**/
+vector<string> Comandos::obterUnidades(const string& path) {
     string line;
     vector<string> unidades;
-    ifstream unidadeX(path, ifstream::in);
+    ifstream unidadeLogica(path, ifstream::in);
 
-    while (getline(unidadeX, line)) {
-        unidades.push_back(line);
+    while (getline(unidadeLogica, line)) {			//Le o arquivo que contem as unidades do RAID5
+        unidades.push_back(line);							//Adiciona a unidade lida ao vector
     }
 
-    unidadeX.close();
+    unidadeLogica.close();
 
     return unidades;
 }
 
 Comandos::LinhaConfig Comandos::separarNomeExtensao(string path) {
     LinhaConfig nome_arquivo;
-    size_t findChar = path.find_last_of("/");
-    if (std::string::npos != findChar) {
+    size_t findChar = path.find_last_of('/');					//Encontra a ultima '/'
+    if (std::string::npos != findChar) {							//Se ela existir, apaga tudo antes dela
         path.erase(0, findChar + 1);
     }
 
-    findChar = path.find_last_of(".");
+    findChar = path.find_last_of('.');							//Encontra o '.'
 
-    if (std::string::npos != findChar) {
-        nome_arquivo.extensao = path.substr(findChar + 1);
+    if (std::string::npos != findChar) {							//Se o arquivo estiver com extensão, separa
+        nome_arquivo.extensao = path.substr(findChar + 1);		// nome e extensão
         path.erase(findChar, path.length());
     }
     nome_arquivo.arquivo = path;
     return nome_arquivo;
 }
 
-bool Comandos::arquivoExiste(LinhaConfig *linhaConfig, string caminhoComando, string nomeArquivo) {
+bool Comandos::arquivoExiste(LinhaConfig &linhaConfig, const string& caminhoComando, const string& nomeArquivo) {
     ifstream arqConfig;
     vector<string> unidades = this->obterUnidades(caminhoComando);
-    if (fsys::exists(unidades[0] + "/" + configFileName)) {
-        arqConfig = ifstream(unidades[0] + "/" + configFileName);
+    if (fsys::exists(unidades[0] + "/" + configFileName)) {			//Procura o arquivo de configuração do MyMFS
+        arqConfig = ifstream(unidades[0] + "/" + configFileName);	// na primeira e segunda unidades
     } else if (fsys::exists(unidades[1] + "/" + configFileName)) {
         arqConfig = ifstream(unidades[1] + "/" + configFileName);
     } else {
         return false;
     }
 
-    LinhaConfig nomeExtensao = this->separarNomeExtensao(nomeArquivo);
-    string arquivoProcurado = nomeExtensao.extensao + "-" + nomeExtensao.arquivo;
-    string linha;
+    LinhaConfig nomeExtensao = this->separarNomeExtensao(nomeArquivo);				//Separa o nome e a extensao do aquivo
+    string arquivoProcurado = nomeExtensao.extensao + "-" + nomeExtensao.arquivo;	//Forma uma string com o formato que
+    string linha;																	//é salvo no arquivo de configuração
 
     while (getline(arqConfig, linha)) {
         size_t aux = linha.find(arquivoProcurado);
         if (aux != string::npos) {
-            size_t x = linha.find_first_of("-");
-            size_t y = linha.find_last_of("-");
+            size_t x = linha.find_first_of('-');
+            size_t y = linha.find_last_of('-');
 
-            linhaConfig->tamanho = stoi(linha.substr(y + 1, string::npos));
+            linhaConfig.tamanho = stoi(linha.substr(y + 1, string::npos));
             linha.erase(y, string::npos);
-            y = linha.find_last_of("-");
-            linhaConfig->extensao = linha.substr(0, x);
-            linhaConfig->arquivo = linha.substr(x + 1, y - x - 1);
-            linhaConfig->quantidade = stoi(linha.substr(y + 1, string::npos));
+            y = linha.find_last_of('-');
+            linhaConfig.extensao = linha.substr(0, x);
+            linhaConfig.arquivo = linha.substr(x + 1, y - x - 1);
+            linhaConfig.quantidade = stoi(linha.substr(y + 1, string::npos));
             return true;
         }
     }
@@ -136,7 +136,7 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
             lck.lock();
             outfile.seekp(diretrizes[i].inicio);
             outfile.write(reinterpret_cast<const char *>(buffer.data()), size);
-//            outfile.flush();
+            outfile.flush();
             lck.unlock();
 
             infile.close();
@@ -154,7 +154,7 @@ void Comandos::leituraParalela(vector<Diretrizes> *d, string filePath, int i, in
             lck.lock();
             outfile.seekp(diretrizes[i].inicio);
             outfile.write(reinterpret_cast<const char *>(descompress.data()), descompress.size());
-//            outfile.flush();
+            outfile.flush();
             lck.unlock();
 
             infile.close();
@@ -182,7 +182,7 @@ void Comandos::alimentarBufferParalelo(vector<Diretrizes> *d, stringstream *buff
 
             lck.lock();
             buffer_out->seekp(diretrizes[i].inicio);
-            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);
+            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
             buffer_out->flush();
             lck.unlock();
 
@@ -200,7 +200,7 @@ void Comandos::alimentarBufferParalelo(vector<Diretrizes> *d, stringstream *buff
 
             lck.lock();
             buffer_out->seekp(diretrizes[i].inicio);
-            buffer_out->write(reinterpret_cast<const char *>(bufferUncompress.data()), size);
+            buffer_out->write(reinterpret_cast<const char *>(bufferUncompress.data()), bufferUncompress.size());
             buffer_out->flush();
             lck.unlock();
 
@@ -214,8 +214,8 @@ void Comandos::alimentarBufferParalelo(vector<Diretrizes> *d, stringstream *buff
     }
 }
 
-void Comandos::primeirasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, int quant) {
-    vector<Diretrizes> diretrizes = *d;
+void Comandos::primeirasLinhas(vector<Diretrizes> &diretrizes, stringstream &buffer_out, int quant) {
+//    vector<Diretrizes> diretrizes = *diretrizes;
     for (int i = 0; i < quant; i++) {
         if (fsys::exists(diretrizes[i].path)) {
             ifstream infile(diretrizes[i].path,
@@ -226,8 +226,8 @@ void Comandos::primeirasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, 
             infile.seekg(0, ios::beg);
             infile.read(reinterpret_cast<char *>(&buffer[0]), size);
 
-            buffer_out->seekp(diretrizes[i].inicio);
-            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);;
+            buffer_out.seekp(diretrizes[i].inicio);
+            buffer_out.write(reinterpret_cast<const char *>(buffer.data()), size);;
 
             infile.close();
 
@@ -240,8 +240,8 @@ void Comandos::primeirasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, 
             infile.seekg(0, ios::beg);
             infile.read(reinterpret_cast<char *>(&buffer[0]), size);
 
-            buffer_out->seekp(diretrizes[i].inicio);
-            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);;
+            buffer_out.seekp(diretrizes[i].inicio);
+            buffer_out.write(reinterpret_cast<const char *>(buffer.data()), size);;
 
             infile.close();
 
@@ -253,8 +253,8 @@ void Comandos::primeirasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, 
     }
 }
 
-void Comandos::ultimasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, int quant) {
-    vector<Diretrizes> diretrizes = *d;
+void Comandos::ultimasLinhas(vector<Diretrizes> &diretrizes, stringstream &buffer_out, int quant) {
+//    vector<Diretrizes> diretrizes = *diretrizes;
     for (int i = 0; i < quant; i++) {
         if (fsys::exists(diretrizes[(diretrizes.size() - quant) + i].path)) {
             ifstream infile(diretrizes[(diretrizes.size() - quant) + i].path,
@@ -265,8 +265,8 @@ void Comandos::ultimasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, in
             infile.seekg(0, ios::beg);
             infile.read(reinterpret_cast<char *>(&buffer[0]), size);
 
-            buffer_out->seekp(diretrizes[i].inicio);
-            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);;
+            buffer_out.seekp(diretrizes[i].inicio);
+            buffer_out.write(reinterpret_cast<const char *>(buffer.data()), size);;
 
             infile.close();
 
@@ -279,8 +279,8 @@ void Comandos::ultimasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, in
             infile.seekg(0, ios::beg);
             infile.read(reinterpret_cast<char *>(&buffer[0]), size);
 
-            buffer_out->seekp(diretrizes[i].inicio);
-            buffer_out->write(reinterpret_cast<const char *>(buffer.data()), size);;
+            buffer_out.seekp(diretrizes[i].inicio);
+            buffer_out.write(reinterpret_cast<const char *>(buffer.data()), size);;
 
             infile.close();
 
@@ -292,7 +292,7 @@ void Comandos::ultimasLinhas(vector<Diretrizes> *d, stringstream *buffer_out, in
     }
 }
 
-string Comandos::config(string caminhoComando, int length, char **unidades) {
+string Comandos::config(const string& caminhoComando, int length, char **unidades) {
     for (int i = 0; i < length; ++i) {
         if (!fsys::exists(unidades[i]))
             return "Endereços inválidos.";
@@ -325,7 +325,7 @@ string Comandos::config(string caminhoComando, int length, char **unidades) {
 }
 
 string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImport) {
-    streampos end;
+    streamoff end;
     vector<string> unidades;
     if (mymfsEstaConfigurado(caminhoComando)) {
 
@@ -333,23 +333,20 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
 
         for (int i = 0; i < unidades.size(); ++i) {
             if (fsys::exists(unidades[i] + "/" + configFileName)) {
-                ifstream arqConfigExiste(unidades[i] + "/" + configFileName);
-                arqConfigExiste.seekg(0, ios::end);
+                ifstream arqConfigExiste(unidades[i] + "/" + configFileName, ios_base::ate);
                 end = arqConfigExiste.tellg();
                 arqConfigExiste.close();
+
                 if (end > this->sizeFileConfig) {                          //Apenas permite a importação se o arquivo de config for menor que 50KB
                     return "Operacao nao realizada! Arquivo " + configFileName + " esta cheio - Mymfs.";
                 }
             }
+            if (fsys::exists(unidades[i]) && !fsys::exists(unidades[i] + "files")) {
+                fsys::create_directory(unidades[i] + "files");
+            }
         }
     } else {
         return "O Mymfs nao esta configurado na unidade informada."; //Caso nao exista, nao permite a importacao
-    }
-
-    for (int i = 0; i < unidades.size(); ++i) {
-        if (fsys::exists(unidades[i]) && !fsys::exists(unidades[i] + "files")) {
-            fsys::create_directory(unidades[i] + "files");
-        }
     }
 
     if (fsys::exists(caminhoArquivoImport)) {
@@ -357,7 +354,7 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
         //Obtem o nome do diretório a ser criado para o arquivo atraves do seu nome
         LinhaConfig nomeArquivo = separarNomeExtensao(caminhoArquivoImport);
         LinhaConfig null;
-        if (!this->arquivoExiste(&null,
+        if (!this->arquivoExiste(null,
                                  caminhoComando,
                                  nomeArquivo.arquivo + "." + nomeArquivo.extensao)) {
             string nomeDiretorio = nomeArquivo.extensao + "-" + nomeArquivo.arquivo;
@@ -368,24 +365,22 @@ string Comandos::importarArquivo(string caminhoComando, string caminhoArquivoImp
 
             int numArquivos = ceil((float) end / (float) this->sizeFileMax); // Verifica quantos arquivos de 500 KB ou menos serão criados
             vector<Diretrizes> diretrizes;
-            int cont = 0;
+
 
             for (int i = 0; i < numArquivos; ++i) {
                 Diretrizes d;
-                d.path = unidades[cont] + "files/" + nomeDiretorio;
-                d.compress = unidades[(cont + 1) % unidades.size()] + "files/" + nomeDiretorio;
+                d.path = unidades[i % unidades.size()] + "files/" + nomeDiretorio;
+                d.compress = unidades[(i + 1) % unidades.size()] + "files/" + nomeDiretorio;
                 d.inicio = i * this->sizeFileMax;
-                if (i >= (numArquivos - 1)) {
-                    d.length = (int) end - (i * this->sizeFileMax);
-                } else {
-                    d.length = this->sizeFileMax;
-                }
-                if (fsys::exists(unidades[cont]) && !fsys::exists(unidades[cont] + "files/" + nomeDiretorio)) {
-                    fsys::create_directory(unidades[cont] + "files/" + nomeDiretorio);
+                d.length = this->sizeFileMax;
+
+                if (fsys::exists(unidades[i % unidades.size()]) && !fsys::exists(unidades[i % unidades.size()] + "files/" + nomeDiretorio)) {
+                    fsys::create_directory(unidades[i % unidades.size()] + "files/" + nomeDiretorio);
+                    fsys::create_directory(unidades[(i + 1) % unidades.size()] + "files/" + nomeDiretorio);
                 }
                 diretrizes.push_back(d);
-                cont = (cont + 1) % unidades.size();
             }
+            diretrizes[diretrizes.size() - 1].length = end - ((diretrizes.size() - 1) * sizeFileMax);
 
             vector<std::thread> threads;
             for (int i = 0; i < this->numThreads; ++i) {
@@ -423,7 +418,7 @@ string Comandos::exportarArquivo(string caminhoComando, string nomeArquivoExport
     //Verifica se o arquivo de configuração e se o arquivo a ser exportado existem
     if (mymfsEstaConfigurado(caminhoComando)) {
         LinhaConfig linhaConfig;
-        if (arquivoExiste(&linhaConfig,
+        if (arquivoExiste(linhaConfig,
                           caminhoComando,
                           nomeArquivoExport)) {//Verifica se encontrou o diretorio do arquivo a ser exportado
             if (!fsys::exists(caminhoDiretorioExport + "/" + nomeArquivoExport)) { //Verifica se o arquivo a ser exportado existe no destino
@@ -559,7 +554,7 @@ string Comandos::remove(string caminhoComando, string nomeArquivo) {
     }
 }
 
-string Comandos::removeAll(string caminhoComando) {
+string Comandos::removeAll(const string& caminhoComando) {
     if (mymfsEstaConfigurado(caminhoComando)) {
         vector<string> unidades = obterUnidades(caminhoComando);
 
@@ -583,7 +578,7 @@ string Comandos::procuraPalavra(string caminhoComando, string palavra, string ar
         LinhaConfig linhaConfig;
 
         //Verifica se encontrou o diretorio do arquivo a ser exportado
-        if (arquivoExiste(&linhaConfig, caminhoComando, arquivoAlvo)) {
+        if (arquivoExiste(linhaConfig, caminhoComando, arquivoAlvo)) {
 
             vector<string> unidades = obterUnidades(caminhoComando);
 
@@ -609,8 +604,7 @@ string Comandos::procuraPalavra(string caminhoComando, string palavra, string ar
             int numThreads = 1;
             for (int i = 0; i < linhaConfig.quantidade; i += numThreads * 3) {
                 for (int j = 0; j < numThreads; j++) {
-                    threads.push_back(std::thread(&Comandos::alimentarBufferParalelo,
-                                                  this,
+                    threads.push_back(std::thread(&Comandos::alimentarBufferParalelo, this,
                                                   &diretrizes,
                                                   &buffer,
                                                   j,
@@ -650,7 +644,7 @@ string Comandos::primeiras100Linhas(string caminhoComando, string caminhoArquivo
         LinhaConfig linhaConfig;
 
         //Verifica se encontrou o diretorio do arquivo a ser exportado
-        if (arquivoExiste(&linhaConfig, caminhoComando, caminhoArquivoToRead)) {
+        if (arquivoExiste(linhaConfig, caminhoComando, caminhoArquivoToRead)) {
 
             vector<string> unidades = obterUnidades(caminhoComando);
             vector<Diretrizes> diretrizes;
@@ -673,7 +667,7 @@ string Comandos::primeiras100Linhas(string caminhoComando, string caminhoArquivo
 
             while ((linhas.size() < (quantLines + 1)) && (cont < diretrizes.size())) {
 
-                primeirasLinhas(&diretrizes, &buffer, cont + 1);
+                primeirasLinhas(diretrizes, buffer, cont + 1);
                 while (getline(buffer, line)) {
                     linhas.push_back(line);
                 }
@@ -716,7 +710,7 @@ string Comandos::ultimas100Linhas(string caminhoComando, string caminhoArquivoTo
         LinhaConfig linhaConfig;
 
         //Verifica se encontrou o diretorio do arquivo a ser exportado
-        if (arquivoExiste(&linhaConfig, caminhoComando, caminhoArquivoToRead)) {
+        if (arquivoExiste(linhaConfig, caminhoComando, caminhoArquivoToRead)) {
 
             vector<string> unidades = obterUnidades(caminhoComando);
             vector<Diretrizes> diretrizes;
@@ -739,7 +733,7 @@ string Comandos::ultimas100Linhas(string caminhoComando, string caminhoArquivoTo
 
             while ((linhas.size() < (quantLines + 1)) && (cont < diretrizes.size())) {
 
-                ultimasLinhas(&diretrizes, &buffer, cont + 1);
+                ultimasLinhas(diretrizes, buffer, cont + 1);
                 while (getline(buffer, line)) {
                     linhas.push_back(line);
                 }
@@ -858,4 +852,11 @@ string Comandos::toUpperCase(string text) {
         text[i] = toupper(text[i]);
     }
     return text;
+}
+
+string Comandos::getAbsolutePath(string path) {
+    if (path[path.size() - 1] == '/' && path[path.size() - 1] == '\\')
+        return path;
+    else
+        return path + '/';
 }
