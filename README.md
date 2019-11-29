@@ -1,15 +1,24 @@
-﻿# MyMFS
-Projeto da disciplina de Sistemas Operacionais da graduação de Engenharia de Software da PUC Minas.
-O MyMFS é um sistema RAID 5, que divide um arquivo entre diversos locais. Este projeto é a continuação do projeto da equipe do semestre anterior, sendo assim, o código deles é o ponto de partida desse.
-Código fonte: https://github.com/Haddadson/mymfs
+﻿### MyMFS
+Projeto da disciplina de Sistemas Operacionais da graduação de Engenharia de Software da PUC Minas, turno noite, segundo semestre de 2019. Materia lecionada pelo professor Lesandro Ponciano dos Santos.
+Desenvolvedores :
+    Rafael Soares Botazini
+    Wesley Mouraria Pereira
+Esse projeto é uma extensão do trabalho dos alunos do primeiro semestre de 2019: https://github.com/Haddadson/mymfs
+
+O MyMFS simula um sistema de arquivos. Esta implementação simula especificamente um sistema RAID 5.
 
 O código é implementado em c/c++, pois visa desempenho ao simular um sistema de arquivos.
 
+### Licenciamento
+
+MIT License
+Licença anexa ao projeto.
+
 ### Objetivos
 
-Permitir que os alunos exercitem os conceitos aprendidos em sala, essenciais para os sistemas operacionais, através da implementação em código. O trabalho simula um sistema de gerencia de arquivos - MyMFS, My Micro File System - com a paginação sendo o arquivo dividido em "partições" de 500KB. O trabalho também aborda os conceitos de multithread através da leitura e escrita simultanea de arquivos. Também aborda os conceitos de condição de corrida e exclusão mútua, uma vez que um mesmo arquivo é escrito simultaneamente por n threads. Há implementação de compressão e descompressão de arquivos, mas os conceitos por tras dos códigos não serão abordados em sala.
+Permitir que os alunos exercitem os conceitos aprendidos em sala, essenciais para os sistemas operacionais, através da implementação em código. O trabalho simula um sistema de gerencia de arquivos - MyMFS, My Micro File System - com a paginação sendo o arquivo dividido em "partições" de 500KB. O trabalho também aborda os conceitos de multithread através da leitura e escrita simultânea de arquivos. Também aborda os conceitos de condição de corrida e exclusão mútua, uma vez que um mesmo arquivo é escrito simultaneamente por n threads. Há implementação de compressão e descompressão de arquivos, mas os conceitos por trás dos códigos não serão abordados em sala.
 
-(O trabalho também aborda vários conceitos da engenharia de software. (Em construção))
+O trabalho também aborda vários conceitos da engenharia de software. Como trabalhar sobre código de outros desenvolvedores, testes unitários, código extensível e modularizado.
 
 ### Programa Compilado
 
@@ -17,10 +26,19 @@ Na pasta "executaveis", se encontram as versões compiladas do projeto para linu
 mymfs.exe => Compilado no Windows 10. Compilador "mingw64" através do CLion.
 mymfs (sem extensão) => Compilado no Linux Mint 19.2. Compilador "Clang" através do CLion.
 
+### Dependencias
+Este projeto usa a biblioteca File System para manipular diretórios, além da biblioteca ZLib para executar a compressão e descompressão dos dados. A biblioteca PThread para as tarefas multithread.
+
+Caso seja necessário, as DLL's correspondentes estão anexadas ao projeto.
+
+Dependencias no Windows:
+Microsoft Visual C++
+
 ### Comandos do MyMFS
 
 Nome: config
 Comando de execução: mymfs.exe X config D E F
+OBS: É necessario o caminho absoluto do diretório.
 Pré-condição: Não existe nenhum arquivo nas unidades D, E e F. Não existe um sistema de arquivos raid
 X mymfs nas unidades D, E, F. (note que D, E e F é apenas um exemplo, podem ser outros nomes e
 quantidade maior que 3)
