@@ -37,7 +37,7 @@ files
 *.lib
 
 # Executables
-*.exe
+.exe
 *.out
 *.app
 
