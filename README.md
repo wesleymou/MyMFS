@@ -11,6 +11,12 @@ Permitir que os alunos exercitem os conceitos aprendidos em sala, essenciais par
 
 (O trabalho também aborda vários conceitos da engenharia de software. (Em construção))
 
+### Programa Compilado
+
+Na pasta "executaveis", se encontram as versões compiladas do projeto para linux e windows.
+mymfs.exe => Compilado no Windows 10. Compilador "mingw64" através do CLion.
+mymfs (sem extensão) => Compilado no Linux Mint 19.2. Compilador "Clang" através do CLion.
+
 ### Comandos do MyMFS
 
 Nome: config
